@@ -1,9 +1,13 @@
 import { Button } from "@/components/ui/button";
-import { Video, Menu } from "lucide-react";
+import { Video, Menu, LogOut, User } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Link, useNavigate } from "react-router-dom";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <nav className="fixed top-0 w-full bg-background/80 backdrop-blur-md border-b border-border z-50">
@@ -27,8 +31,23 @@ const Navbar = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-4">
-            <Button variant="ghost">Sign In</Button>
-            <Button variant="hero">Get Started Free</Button>
+            {user ? (
+              <>
+                <Button variant="ghost" onClick={() => navigate('/dashboard')}>
+                  <User className="w-4 h-4 mr-2" />
+                  Dashboard
+                </Button>
+                <Button variant="ghost" onClick={signOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" onClick={() => navigate('/auth')}>Sign In</Button>
+                <Button variant="hero" onClick={() => navigate('/auth')}>Get Started Free</Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -51,8 +70,17 @@ const Navbar = () => {
               <a href="#demo" className="text-foreground hover:text-primary transition-colors py-2">Demo</a>
               <a href="#contact" className="text-foreground hover:text-primary transition-colors py-2">Contact</a>
               <div className="flex flex-col gap-2 pt-4">
-                <Button variant="ghost">Sign In</Button>
-                <Button variant="hero">Get Started Free</Button>
+                {user ? (
+                  <>
+                    <Button variant="ghost" onClick={() => navigate('/dashboard')}>Dashboard</Button>
+                    <Button variant="ghost" onClick={signOut}>Sign Out</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" onClick={() => navigate('/auth')}>Sign In</Button>
+                    <Button variant="hero" onClick={() => navigate('/auth')}>Get Started Free</Button>
+                  </>
+                )}
               </div>
             </div>
           </div>

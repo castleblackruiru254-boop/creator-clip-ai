@@ -1,1 +1,10 @@
 project_id = "uhqlwmucjhnpyvgxtupw"
+
+[functions.process-video]
+verify_jwt = true
+
+[functions.generate-script]
+verify_jwt = true
+
+[functions.ai-highlight-detection]
+verify_jwt = true
