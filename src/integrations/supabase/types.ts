@@ -14,7 +14,166 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clips: {
+        Row: {
+          ai_score: number | null
+          created_at: string
+          duration: number
+          end_time: number
+          id: string
+          platform: string | null
+          project_id: string
+          start_time: number
+          status: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          ai_score?: number | null
+          created_at?: string
+          duration: number
+          end_time: number
+          id?: string
+          platform?: string | null
+          project_id: string
+          start_time: number
+          status?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          ai_score?: number | null
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          platform?: string | null
+          project_id?: string
+          start_time?: number
+          status?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clips_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          credits_remaining: number | null
+          email: string
+          full_name: string | null
+          id: string
+          subscription_tier: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          credits_remaining?: number | null
+          email: string
+          full_name?: string | null
+          id: string
+          subscription_tier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          credits_remaining?: number | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          subscription_tier?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          source_video_duration: number | null
+          source_video_url: string | null
+          status: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          source_video_duration?: number | null
+          source_video_url?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          source_video_duration?: number | null
+          source_video_url?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subtitles: {
+        Row: {
+          clip_id: string
+          created_at: string
+          end_time: number
+          id: string
+          start_time: number
+          text: string
+        }
+        Insert: {
+          clip_id: string
+          created_at?: string
+          end_time: number
+          id?: string
+          start_time: number
+          text: string
+        }
+        Update: {
+          clip_id?: string
+          created_at?: string
+          end_time?: number
+          id?: string
+          start_time?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtitles_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "clips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
