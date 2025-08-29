@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ interface Project {
 
 const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -199,12 +200,12 @@ const Dashboard = () => {
               </CardContent>
             </Card>
             
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => navigate('/quick-generate')}>
               <CardContent className="p-6 text-center">
                 <Play className="w-12 h-12 mx-auto mb-4 text-accent group-hover:scale-110 transition-transform" />
                 <h3 className="font-semibold mb-2">Quick Generate</h3>
                 <p className="text-sm text-muted-foreground">
-                  AI-powered clip generation from URL
+                  AI-powered clip generation from YouTube videos
                 </p>
               </CardContent>
             </Card>
