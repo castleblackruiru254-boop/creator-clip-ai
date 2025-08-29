@@ -27,25 +27,27 @@ serve(async (req) => {
   try {
     const { query, maxResults = 25, publishedAfter, publishedBefore, location, relevanceLanguage = 'en' } = await req.json()
 
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('Authorization header missing')
+    }
+
     // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     )
 
     // Get the authenticated user
     const {
       data: { user },
       error: authError,
-    } = await supabaseClient.auth.getUser()
+    } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
 
     if (authError || !user) {
-      throw new Error('Authentication required')
+      console.error('Auth error:', authError)
+      throw new Error('Authentication failed')
     }
 
     const youtubeApiKey = Deno.env.get('YOUTUBE_API_KEY');

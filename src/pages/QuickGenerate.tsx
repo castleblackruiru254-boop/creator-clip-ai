@@ -86,7 +86,10 @@ const QuickGenerate = () => {
           maxResults: parseInt(searchFilters.maxResults),
           publishedAfter: searchFilters.publishedAfter || undefined,
           publishedBefore: searchFilters.publishedBefore || undefined,
-        }
+        },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
       });
 
       if (error) throw error;
@@ -138,7 +141,10 @@ const QuickGenerate = () => {
           title: projectTitle,
           description: projectDescription,
           videoUrl: selectedVideo.url,
-        }
+        },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
       });
 
       if (error) throw error;
