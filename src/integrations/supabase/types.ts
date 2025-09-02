@@ -179,7 +179,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_clips_count: {
+        Args: { user_uuid: string }
+        Returns: number
+      }
+      get_user_project_count: {
+        Args: { user_uuid: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
