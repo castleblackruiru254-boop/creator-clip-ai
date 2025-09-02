@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -19,10 +19,13 @@ import {
   Loader2,
   Wand2,
   ExternalLink,
-  Filter
+  Filter,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/useRealtime";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface YouTubeVideo {
@@ -41,6 +44,7 @@ const QuickGenerate = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { status: realtimeStatus } = useRealtime();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<YouTubeVideo[]>([]);
@@ -209,11 +213,26 @@ const QuickGenerate = () => {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Dashboard
             </Button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-primary to-accent rounded-lg flex items-center justify-center">
-                <Wand2 className="w-5 h-5 text-white" />
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-r from-primary to-accent rounded-lg flex items-center justify-center">
+                  <Wand2 className="w-5 h-5 text-white" />
+                </div>
+                <h1 className="text-2xl font-bold">Quick Generate</h1>
               </div>
-              <h1 className="text-2xl font-bold">Quick Generate</h1>
+              
+              <div className="flex items-center gap-2 text-sm">
+                {realtimeStatus === 'connected' ? (
+                  <Wifi className="w-4 h-4 text-success" />
+                ) : realtimeStatus === 'connecting' ? (
+                  <Loader2 className="w-4 h-4 text-warning animate-spin" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-destructive" />
+                )}
+                <span className="text-muted-foreground capitalize">
+                  Real-time {realtimeStatus}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -328,18 +347,20 @@ const QuickGenerate = () => {
                         <h3 className="font-semibold text-sm line-clamp-2 mb-2">
                           {video.title}
                         </h3>
-                        <div className="space-y-2 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Video className="w-3 h-3" />
-                            {video.channelTitle}
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1 truncate">
+                            <Video className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{video.channelTitle}</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Eye className="w-3 h-3" />
-                            {formatViewCount(video.viewCount)}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(video.publishedAt).toLocaleDateString()}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <Eye className="w-3 h-3" />
+                              {formatViewCount(video.viewCount)}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(video.publishedAt).toLocaleDateString()}
+                            </div>
                           </div>
                         </div>
                         <div className="mt-3 flex gap-2">

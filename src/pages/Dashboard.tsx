@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Video, Upload, Play, BarChart3, LogOut, User, Settings } from "lucide-react";
+import { Video, Upload, Play, BarChart3, LogOut, User, Settings, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Profile {
@@ -21,6 +21,15 @@ interface Project {
   description: string | null;
   status: string;
   created_at: string;
+  user_id: string;
+}
+
+interface Clip {
+  id: string;
+  project_id: string;
+  title: string;
+  status: string;
+  created_at: string;
 }
 
 const Dashboard = () => {
@@ -28,12 +37,14 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [clips, setClips] = useState<Clip[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
     if (user) {
       fetchUserData();
+      setupRealtimeSubscriptions();
     }
   }, [user]);
 
@@ -58,6 +69,23 @@ const Dashboard = () => {
 
       if (projectsError) throw projectsError;
       setProjects(projectsData || []);
+
+      // Fetch user clips
+      const { data: clipsData, error: clipsError } = await supabase
+        .from('clips')
+        .select(`
+          id,
+          project_id,
+          title,
+          status,
+          created_at,
+          projects!inner(user_id)
+        `)
+        .eq('projects.user_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      if (clipsError) throw clipsError;
+      setClips(clipsData || []);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -67,6 +95,91 @@ const Dashboard = () => {
     } finally {
       setLoadingData(false);
     }
+  };
+
+  const setupRealtimeSubscriptions = () => {
+    // Subscribe to profile changes
+    const profileChannel = supabase
+      .channel('profile-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user!.id}`
+        },
+        (payload) => setProfile(payload.new as Profile)
+      )
+      .subscribe();
+
+    // Subscribe to project changes
+    const projectsChannel = supabase
+      .channel('project-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'projects',
+          filter: `user_id=eq.${user!.id}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setProjects(prev => [payload.new as Project, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            setProjects(prev => 
+              prev.map(p => p.id === payload.new.id ? payload.new as Project : p)
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setProjects(prev => prev.filter(p => p.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to clip changes
+    const clipsChannel = supabase
+      .channel('clip-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'clips'
+        },
+        async (payload) => {
+          // Check if this clip belongs to user's project
+          const projectId = (payload.new as any)?.project_id || (payload.old as any)?.project_id;
+          if (!projectId) return;
+
+          const { data: projectData } = await supabase
+            .from('projects')
+            .select('user_id')
+            .eq('id', projectId)
+            .single();
+
+          if (projectData?.user_id === user!.id) {
+            if (payload.eventType === 'INSERT') {
+              setClips(prev => [payload.new as Clip, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+              setClips(prev => 
+                prev.map(c => c.id === (payload.new as any).id ? payload.new as Clip : c)
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setClips(prev => prev.filter(c => c.id !== (payload.old as any).id));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup function
+    return () => {
+      supabase.removeChannel(profileChannel);
+      supabase.removeChannel(projectsChannel);
+      supabase.removeChannel(clipsChannel);
+    };
   };
 
   const handleSignOut = async () => {
@@ -145,7 +258,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
@@ -154,33 +267,46 @@ const Dashboard = () => {
             <CardContent>
               <div className="text-2xl font-bold">{projects.length}</div>
               <p className="text-xs text-muted-foreground">
-                +2 from last month
+                Live count
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Credits Remaining</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Clips</CardTitle>
+              <Zap className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{clips.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Generated clips
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Credits</CardTitle>
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{profile?.credits_remaining}</div>
               <p className="text-xs text-muted-foreground">
-                Resets monthly
+                Available now
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Subscription</CardTitle>
+              <CardTitle className="text-sm font-medium">Plan</CardTitle>
               <User className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold capitalize">{profile?.subscription_tier}</div>
               <p className="text-xs text-muted-foreground">
-                {profile?.subscription_tier === 'free' ? 'Upgrade for more features' : 'Active plan'}
+                Current tier
               </p>
             </CardContent>
           </Card>
@@ -250,18 +376,28 @@ const Dashboard = () => {
                         <p className="text-sm text-muted-foreground">
                           {project.description || 'No description'}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Created {new Date(project.created_at).toLocaleDateString()}
-                        </p>
+                        <div className="flex items-center gap-4 mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(project.created_at).toLocaleDateString()}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {clips.filter(c => c.project_id === project.id).length} clips
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs capitalize ${
+                        <span className={`px-2 py-1 rounded-full text-xs capitalize relative ${
                           project.status === 'completed' 
                             ? 'bg-success/10 text-success' 
                             : project.status === 'processing'
-                            ? 'bg-warning/10 text-warning'
+                            ? 'bg-warning/10 text-warning animate-pulse'
+                            : project.status === 'failed'
+                            ? 'bg-destructive/10 text-destructive'
                             : 'bg-muted text-muted-foreground'
                         }`}>
+                          {project.status === 'processing' && (
+                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full animate-ping"></div>
+                          )}
                           {project.status}
                         </span>
                         <Button variant="ghost" size="sm">
