@@ -23,10 +23,10 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-foreground hover:text-primary transition-colors">Features</a>
-            <a href="#pricing" className="text-foreground hover:text-primary transition-colors">Pricing</a>
-            <a href="#demo" className="text-foreground hover:text-primary transition-colors">Demo</a>
-            <a href="#contact" className="text-foreground hover:text-primary transition-colors">Contact</a>
+            <Link to="/features" className="text-foreground hover:text-primary transition-colors">Features</Link>
+            <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">Pricing</Link>
+            <Link to="/demo" className="text-foreground hover:text-primary transition-colors">Demo</Link>
+            <Link to="/contact" className="text-foreground hover:text-primary transition-colors">Contact</Link>
           </div>
 
           {/* Desktop Actions */}
@@ -65,10 +65,10 @@ const Navbar = () => {
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-border">
             <div className="flex flex-col gap-4">
-              <a href="#features" className="text-foreground hover:text-primary transition-colors py-2">Features</a>
-              <a href="#pricing" className="text-foreground hover:text-primary transition-colors py-2">Pricing</a>
-              <a href="#demo" className="text-foreground hover:text-primary transition-colors py-2">Demo</a>
-              <a href="#contact" className="text-foreground hover:text-primary transition-colors py-2">Contact</a>
+              <Link to="/features" className="text-foreground hover:text-primary transition-colors py-2">Features</Link>
+              <Link to="/pricing" className="text-foreground hover:text-primary transition-colors py-2">Pricing</Link>
+              <Link to="/demo" className="text-foreground hover:text-primary transition-colors py-2">Demo</Link>
+              <Link to="/contact" className="text-foreground hover:text-primary transition-colors py-2">Contact</Link>
               <div className="flex flex-col gap-2 pt-4">
                 {user ? (
                   <>

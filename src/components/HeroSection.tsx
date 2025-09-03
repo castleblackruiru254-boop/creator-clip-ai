@@ -1,8 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Play, Video, Wand2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import heroImage from "@/assets/hero-image.jpg";
 
 const HeroSection = () => {
+  const navigate = useNavigate();
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-background via-card to-muted">
       {/* Background Elements */}
@@ -31,12 +34,12 @@ const HeroSection = () => {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="lg" className="group">
+              <Button variant="hero" size="lg" className="group" onClick={() => navigate('/start-creating')}>
                 <Video className="w-5 h-5 mr-2 transition-transform group-hover:scale-110" />
                 Start Creating Free
               </Button>
               
-              <Button variant="secondary" size="lg" className="group">
+              <Button variant="secondary" size="lg" className="group" onClick={() => navigate('/demo')}>
                 <Play className="w-5 h-5 mr-2 transition-transform group-hover:scale-110" />
                 Watch Demo
               </Button>
