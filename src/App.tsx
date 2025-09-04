@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import QuickGenerate from "./pages/QuickGenerate";
 import NotFound from "./pages/NotFound";
 import StartCreating from "./pages/StartCreating";
+import ImportFromUrl from "./pages/ImportFromUrl";
 import Features from "./pages/Features";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/quick-generate" element={<QuickGenerate />} />
             <Route path="/start-creating" element={<StartCreating />} />
+            <Route path="/import-from-url" element={<ImportFromUrl />} />
             <Route path="/features" element={<Features />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/contact" element={<Contact />} />

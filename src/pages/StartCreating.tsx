@@ -54,7 +54,7 @@ const StartCreating = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" onClick={handleGetStarted}>
+              <Button className="w-full" onClick={() => navigate('/import-from-url')}>
                 Import from YouTube
               </Button>
             </CardContent>
