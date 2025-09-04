@@ -35,40 +35,51 @@ const ImportFromUrl = () => {
     }
 
     setIsLoading(true);
+    console.log('Starting import process for URL:', url);
     
     try {
       // Get the current session for authorization
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Session check:', { session: !!session, error: sessionError });
       
-      if (!session) {
+      if (sessionError || !session) {
+        console.error('Session error:', sessionError);
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to continue",
+          variant: "destructive",
+        });
         navigate('/auth');
         return;
       }
 
+      console.log('Calling process-video function...');
+      
       // Call the process-video Edge Function
       const { data, error } = await supabase.functions.invoke('process-video', {
         body: {
           title: projectTitle || 'Imported Video',
           description: projectDescription || '',
           videoUrl: url.trim()
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        }
       });
 
+      console.log('Function response:', { data, error });
+
       if (error) {
+        console.error('Function error:', error);
         throw new Error(error.message || 'Failed to process video');
       }
 
       toast({
         title: "Import Started",
-        description: `Video processing started. Project ID: ${data.projectId}. ${data.estimatedTime ? `Estimated time: ${data.estimatedTime}` : ''}`,
+        description: `Video processing started. ${data?.projectId ? `Project ID: ${data.projectId}` : ''} ${data?.estimatedTime ? `Estimated time: ${data.estimatedTime}` : ''}`,
       });
       
       // Navigate to dashboard to see the processing project
       navigate('/dashboard');
     } catch (error: any) {
+      console.error('Import error:', error);
       toast({
         title: "Import Failed",
         description: error.message || "Failed to import video. Please try again.",
