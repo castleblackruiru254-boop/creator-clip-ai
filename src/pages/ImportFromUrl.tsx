@@ -8,6 +8,7 @@ import { Youtube, ArrowLeft, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const ImportFromUrl = () => {
   const navigate = useNavigate();
@@ -36,20 +37,41 @@ const ImportFromUrl = () => {
     setIsLoading(true);
     
     try {
-      // Here you would typically call your backend to process the URL
-      // For now, we'll simulate the process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Get the current session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
       
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+
+      // Call the process-video Edge Function
+      const { data, error } = await supabase.functions.invoke('process-video', {
+        body: {
+          title: projectTitle || 'Imported Video',
+          description: projectDescription || '',
+          videoUrl: url.trim()
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to process video');
+      }
+
       toast({
         title: "Import Started",
-        description: "Your video is being processed. You'll be redirected to the dashboard.",
+        description: `Video processing started. Project ID: ${data.projectId}. ${data.estimatedTime ? `Estimated time: ${data.estimatedTime}` : ''}`,
       });
       
+      // Navigate to dashboard to see the processing project
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Import Failed",
-        description: "Failed to import video. Please try again.",
+        description: error.message || "Failed to import video. Please try again.",
         variant: "destructive",
       });
     } finally {
