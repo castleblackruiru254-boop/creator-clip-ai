@@ -56,17 +56,27 @@ const Dashboard = () => {
   const { processVideo, processing } = useVideoProcessor();
 
   const fetchUserData = useCallback(async () => {
+    console.log('🔄 fetchUserData called with user:', user?.id);
+    setLoadingData(true);
+    
     try {
+      console.log('📡 Fetching user profile...');
       // Fetch user profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user!.id)
-        .single();
+        .maybeSingle();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('❌ Profile fetch error:', profileError);
+        throw profileError;
+      }
+      
+      console.log('✅ Profile data fetched:', profileData);
       setProfile(profileData);
 
+      console.log('📡 Fetching user projects...');
       // Fetch user projects
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
@@ -74,17 +84,23 @@ const Dashboard = () => {
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
 
-      if (projectsError) throw projectsError;
+      if (projectsError) {
+        console.error('❌ Projects fetch error:', projectsError);
+        throw projectsError;
+      }
+      
+      console.log('✅ Projects data fetched:', projectsData);
       setProjects(projectsData || []);
 
     } catch (error) {
-      console.error('Failed to fetch user data:', error);
+      console.error('❌ Failed to fetch user data:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to load user data",
         variant: "destructive",
       });
     } finally {
+      console.log('✅ fetchUserData complete, setting loadingData to false');
       setLoadingData(false);
     }
   }, [user, toast]);
@@ -120,10 +136,12 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (user) {
+    console.log('🔄 Dashboard useEffect triggered - user:', !!user, 'loading:', loading);
+    if (user && !loading) {
+      console.log('🚀 Calling fetchUserData...');
       fetchUserData();
     }
-  }, [user, fetchUserData]);
+  }, [user, loading, fetchUserData]);
 
   const toggleProjectExpansion = async (projectId: string) => {
     if (selectedProject === projectId) {
@@ -174,7 +192,10 @@ const Dashboard = () => {
     }
   };
 
+  console.log('🔍 Dashboard render - loading:', loading, 'loadingData:', loadingData, 'user:', !!user);
+  
   if (loading || loadingData) {
+    console.log('⏳ Dashboard showing loading state');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>

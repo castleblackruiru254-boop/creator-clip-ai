@@ -24,7 +24,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
-      cacheTime: 10 * 60 * 1000, // 10 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
       retry: (failureCount, error: any) => {
         if (error?.status === 404) return false;
         return failureCount < 2;
@@ -61,13 +61,13 @@ const AppContent = () => {
     
     // Start periodic performance monitoring
     const performanceInterval = setInterval(() => {
-      DatabasePoolMonitor.logStats();
+      const stats = DatabasePoolMonitor.getStats();
       
-      const dbHealth = DatabasePoolMonitor.getHealthStatus();
-      if (dbHealth.status !== 'healthy') {
-        logger.warn('Database pool health degraded', {
+      if (stats.errorRate > 10) {
+        logger.warn('Database pool error rate high', {
           component: 'app-monitoring',
-          healthStatus: dbHealth,
+          errorRate: stats.errorRate,
+          stats,
         });
       }
     }, 60000); // Every minute
