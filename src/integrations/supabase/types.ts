@@ -70,6 +70,54 @@ export type Database = {
           },
         ]
       }
+      processing_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          max_retries: number | null
+          payload: Json
+          priority: string
+          progress: number | null
+          retry_count: number | null
+          started_at: string | null
+          status: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_retries?: number | null
+          payload: Json
+          priority?: string
+          progress?: number | null
+          retry_count?: number | null
+          started_at?: string | null
+          status?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_retries?: number | null
+          payload?: Json
+          priority?: string
+          progress?: number | null
+          retry_count?: number | null
+          started_at?: string | null
+          status?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -174,12 +222,68 @@ export type Database = {
           },
         ]
       }
+      user_clips: {
+        Row: {
+          clip_id: string | null
+          created_at: string | null
+          id: string
+          project_id: string | null
+          user_id: string
+        }
+        Insert: {
+          clip_id?: string | null
+          created_at?: string | null
+          id?: string
+          project_id?: string | null
+          user_id: string
+        }
+        Update: {
+          clip_id?: string | null
+          created_at?: string | null
+          id?: string
+          project_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_clips_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "clips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_clips_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_active_jobs: {
+        Args: { p_user_id: string }
+        Returns: {
+          created_at: string
+          job_id: string
+          job_progress: number
+          job_status: string
+          job_type: string
+        }[]
+      }
+      get_user_clips_count: {
+        Args: { user_uuid: string }
+        Returns: number
+      }
+      get_user_project_count: {
+        Args: { user_uuid: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
