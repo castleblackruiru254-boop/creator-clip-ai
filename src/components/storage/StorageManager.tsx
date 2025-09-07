@@ -21,14 +21,12 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface StorageManagerProps {
   onFileSelect?: (file: FileMetadata) => void;
-  showUploadButton?: boolean;
   bucketFilter?: string;
   className?: string;
 }
 
 const StorageManager: React.FC<StorageManagerProps> = ({
   onFileSelect,
-  showUploadButton = false,
   bucketFilter,
   className = ''
 }) => {

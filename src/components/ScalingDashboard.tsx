@@ -138,11 +138,6 @@ const ScalingDashboard: React.FC = () => {
     );
   }
 
-  const getStatusColor = (value: number, threshold: number) => {
-    if (value >= threshold * 0.9) return 'destructive';
-    if (value >= threshold * 0.7) return 'warning';
-    return 'default';
-  };
 
   const getHealthStatus = () => {
     if (!scalingMetrics || !databaseStats) return 'unknown';
@@ -285,12 +280,12 @@ const ScalingDashboard: React.FC = () => {
                   </Button>
                 </div>
 
-                {scalingMetrics?.cooldownRemaining > 0 && (
+                {scalingMetrics?.cooldownRemaining && scalingMetrics.cooldownRemaining > 0 && (
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Scaling Cooldown Active</AlertTitle>
                     <AlertDescription>
-                      Next scaling action available in {Math.ceil(scalingMetrics.cooldownRemaining / 1000)} seconds
+                      Next scaling action available in {Math.ceil((scalingMetrics?.cooldownRemaining || 0) / 1000)} seconds
                     </AlertDescription>
                   </Alert>
                 )}

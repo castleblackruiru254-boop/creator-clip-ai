@@ -51,7 +51,7 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
           options: {
             emailRedirectTo: `${window.location.origin}/`,
             data: {
-              full_name: validatedData.fullName,
+              full_name: (validatedData as any).fullName || validatedData.email.split('@')[0],
             }
           }
         });
