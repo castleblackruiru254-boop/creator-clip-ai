@@ -1,0 +1,496 @@
+version: '3.8'
+
+services:
+  # Load Balancer (Nginx)
+  nginx-lb:
+    image: nginx:alpine
+    container_name: creator-clip-ai-lb
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Admin interface
+    volumes:
+      - ./nginx/load-balancer.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl:ro
+      - nginx-cache:/var/cache/nginx
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - app1
+      - app2
+      - app3
+    networks:
+      - frontend
+      - backend
+      - monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.datadoghq.ad.check_names=[\"nginx\"]"
+      - "com.datadoghq.ad.init_configs=[{}]"
+      - "com.datadoghq.ad.instances=[{\"nginx_status_url\": \"http://%%host%%:8080/nginx-status\"}]"
+
+  # Application Instance 1
+  app1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: creator-clip-ai-app1
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - WS_PORT=3001
+      - INSTANCE_ID=app1
+      - LOAD_BALANCER_ENABLED=true
+      - SESSION_AFFINITY=false
+      # Database connection pooling
+      - VITE_DB_MIN_CONNECTIONS=2
+      - VITE_DB_MAX_CONNECTIONS=20
+      - VITE_DB_POOL_SIZE=10
+      - VITE_DB_ACQUIRE_TIMEOUT=10000
+      - VITE_DB_IDLE_TIMEOUT=300000
+      # CDN configuration
+      - VITE_CDN_ENABLED=true
+      - VITE_CDN_BASE_URL=${CDN_BASE_URL}
+      - VITE_CDN_CACHE_TTL=86400
+      # Load balancing
+      - MAX_CONCURRENT_REQUESTS=1000
+      - REQUEST_TIMEOUT=30000
+      - GRACEFUL_SHUTDOWN_TIMEOUT=30000
+      # From existing env files
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_OPENAI_API_KEY=${VITE_OPENAI_API_KEY}
+      - VITE_ANTHROPIC_API_KEY=${VITE_ANTHROPIC_API_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - REDIS_URL=redis://redis-cluster:6379
+    volumes:
+      - app-logs:/app/logs
+      - video-storage:/app/storage
+    networks:
+      - backend
+      - database
+      - cache
+    depends_on:
+      - redis-cluster
+      - postgres-master
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Application Instance 2
+  app2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: creator-clip-ai-app2
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - WS_PORT=3001
+      - INSTANCE_ID=app2
+      - LOAD_BALANCER_ENABLED=true
+      - SESSION_AFFINITY=false
+      # Database connection pooling (same as app1)
+      - VITE_DB_MIN_CONNECTIONS=2
+      - VITE_DB_MAX_CONNECTIONS=20
+      - VITE_DB_POOL_SIZE=10
+      - VITE_DB_ACQUIRE_TIMEOUT=10000
+      - VITE_DB_IDLE_TIMEOUT=300000
+      # CDN configuration
+      - VITE_CDN_ENABLED=true
+      - VITE_CDN_BASE_URL=${CDN_BASE_URL}
+      - VITE_CDN_CACHE_TTL=86400
+      # Load balancing
+      - MAX_CONCURRENT_REQUESTS=1000
+      - REQUEST_TIMEOUT=30000
+      - GRACEFUL_SHUTDOWN_TIMEOUT=30000
+      # From existing env files
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_OPENAI_API_KEY=${VITE_OPENAI_API_KEY}
+      - VITE_ANTHROPIC_API_KEY=${VITE_ANTHROPIC_API_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - REDIS_URL=redis://redis-cluster:6379
+    volumes:
+      - app-logs:/app/logs
+      - video-storage:/app/storage
+    networks:
+      - backend
+      - database
+      - cache
+    depends_on:
+      - redis-cluster
+      - postgres-master
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Application Instance 3
+  app3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: creator-clip-ai-app3
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - WS_PORT=3001
+      - INSTANCE_ID=app3
+      - LOAD_BALANCER_ENABLED=true
+      - SESSION_AFFINITY=false
+      # Database connection pooling (same as app1)
+      - VITE_DB_MIN_CONNECTIONS=2
+      - VITE_DB_MAX_CONNECTIONS=20
+      - VITE_DB_POOL_SIZE=10
+      - VITE_DB_ACQUIRE_TIMEOUT=10000
+      - VITE_DB_IDLE_TIMEOUT=300000
+      # CDN configuration
+      - VITE_CDN_ENABLED=true
+      - VITE_CDN_BASE_URL=${CDN_BASE_URL}
+      - VITE_CDN_CACHE_TTL=86400
+      # Load balancing
+      - MAX_CONCURRENT_REQUESTS=1000
+      - REQUEST_TIMEOUT=30000
+      - GRACEFUL_SHUTDOWN_TIMEOUT=30000
+      # From existing env files
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_OPENAI_API_KEY=${VITE_OPENAI_API_KEY}
+      - VITE_ANTHROPIC_API_KEY=${VITE_ANTHROPIC_API_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - REDIS_URL=redis://redis-cluster:6379
+    volumes:
+      - app-logs:/app/logs
+      - video-storage:/app/storage
+    networks:
+      - backend
+      - database
+      - cache
+    depends_on:
+      - redis-cluster
+      - postgres-master
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Redis Cluster for Session Storage and Caching
+  redis-cluster:
+    image: redis:7-alpine
+    container_name: creator-clip-ai-redis-cluster
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - cache
+      - monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.2'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # PostgreSQL Master (for write operations)
+  postgres-master:
+    image: postgres:15-alpine
+    container_name: creator-clip-ai-postgres-master
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-master-data:/var/lib/postgresql/data
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - database
+      - monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.2'
+
+  # PostgreSQL Read Replica (for read operations)
+  postgres-replica:
+    image: postgres:15-alpine
+    container_name: creator-clip-ai-postgres-replica
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_MASTER_HOST=postgres-master
+      - PGUSER=${POSTGRES_USER}
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+    networks:
+      - database
+      - monitoring
+    depends_on:
+      - postgres-master
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: creator-clip-ai-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - monitoring
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # Grafana for monitoring dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: creator-clip-ai-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+
+  # Auto-scaler service
+  autoscaler:
+    image: creator-clip-ai-autoscaler:latest
+    build:
+      context: ./autoscaler
+      dockerfile: Dockerfile
+    container_name: creator-clip-ai-autoscaler
+    environment:
+      - NODE_ENV=production
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - COMPOSE_PROJECT_NAME=creator-clip-ai
+      - MIN_INSTANCES=3
+      - MAX_INSTANCES=10
+      - CPU_THRESHOLD=70
+      - MEMORY_THRESHOLD=80
+      - REQUEST_RATE_THRESHOLD=100
+      - SCALE_UP_COOLDOWN=60
+      - SCALE_DOWN_COOLDOWN=300
+      - PROMETHEUS_URL=http://prometheus:9090
+      - REDIS_URL=redis://redis-cluster:6379
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+    networks:
+      - monitoring
+      - backend
+    depends_on:
+      - prometheus
+      - redis-cluster
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # Health check monitor
+  health-monitor:
+    image: alpine/curl
+    container_name: creator-clip-ai-health-monitor
+    command: >
+      sh -c "
+      while true; do
+        # Check load balancer health
+        curl -f http://nginx-lb/health || echo 'Load balancer health check failed';
+        
+        # Check application instances
+        curl -f http://app1:3000/api/health || echo 'App1 health check failed';
+        curl -f http://app2:3000/api/health || echo 'App2 health check failed';
+        curl -f http://app3:3000/api/health || echo 'App3 health check failed';
+        
+        # Check Redis
+        redis-cli -h redis-cluster ping || echo 'Redis health check failed';
+        
+        # Check PostgreSQL
+        pg_isready -h postgres-master -U ${POSTGRES_USER} || echo 'PostgreSQL master health check failed';
+        pg_isready -h postgres-replica -U ${POSTGRES_USER} || echo 'PostgreSQL replica health check failed';
+        
+        sleep 30;
+      done
+      "
+    networks:
+      - backend
+      - database
+      - cache
+      - monitoring
+    depends_on:
+      - nginx-lb
+      - app1
+      - app2
+      - app3
+      - redis-cluster
+      - postgres-master
+      - postgres-replica
+    restart: unless-stopped
+
+networks:
+  frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+  database:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+  cache:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+
+volumes:
+  nginx-cache:
+    driver: local
+  nginx-logs:
+    driver: local
+  app-logs:
+    driver: local
+  video-storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/app-storage/videos
+  redis-data:
+    driver: local
+  postgres-master-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/app-storage/postgres-master
+  postgres-replica-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/app-storage/postgres-replica
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

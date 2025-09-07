@@ -2,7 +2,7 @@ import { Video, Twitter, Instagram, Youtube, Linkedin } from "lucide-react";
 
 const Footer = () => {
   return (
-    <footer className="bg-muted/50 border-t border-border">
+    <footer id="contact" className="bg-muted/50 border-t border-border">
       <div className="container mx-auto px-6 py-16">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}

@@ -2,8 +2,23 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://uhqlwmucjhnpyvgxtupw.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVocWx3bXVjamhucHl2Z3h0dXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzNjcwMTMsImV4cCI6MjA3MTk0MzAxM30.D8dhFFBMs4xFyZM4x1b_gRoYB8HGmd7XPQlns4YOxkA";
+// Get environment variables with validation
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+// Validate required environment variables
+if (!SUPABASE_URL) {
+  throw new Error('Missing required environment variable: VITE_SUPABASE_URL');
+}
+
+if (!SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error('Missing required environment variable: VITE_SUPABASE_PUBLISHABLE_KEY');
+}
+
+// Validate URL format
+if (!SUPABASE_URL.startsWith('https://') || !SUPABASE_URL.includes('.supabase.co')) {
+  throw new Error('Invalid Supabase URL format');
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -13,5 +28,21 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+    flowType: 'pkce',
+    detectSessionInUrl: true,
+    storageKey: 'viralclips-auth-token',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'viralclips@1.0.0',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });

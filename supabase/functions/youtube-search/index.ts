@@ -91,7 +91,9 @@ serve(async (req) => {
     }
 
     const searchData = await searchResponse.json();
-    const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+    const videoIds = searchData.items.map((item: {
+      id: { videoId: string };
+    }) => item.id.videoId).join(',');
 
     // Get additional video details (duration, views, etc.)
     const detailsParams = new URLSearchParams({
@@ -110,8 +112,24 @@ serve(async (req) => {
     const detailsData = await detailsResponse.json();
 
     // Combine search results with details
-    const videos: YouTubeVideo[] = searchData.items.map((item: any) => {
-      const details = detailsData.items.find((d: any) => d.id === item.id.videoId);
+    const videos: YouTubeVideo[] = searchData.items.map((item: {
+      id: { videoId: string };
+      snippet: {
+        title: string;
+        description: string;
+        publishedAt: string;
+        channelTitle: string;
+        thumbnails: {
+          high?: { url: string };
+          medium?: { url: string };
+        };
+      };
+    }) => {
+      const details = detailsData.items.find((d: {
+        id: string;
+        contentDetails?: { duration: string };
+        statistics?: { viewCount: string };
+      }) => d.id === item.id.videoId);
       
       return {
         id: item.id.videoId,

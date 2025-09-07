@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # Frontend application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${DOCKER_TARGET:-production}
+    ports:
+      - "${APP_PORT:-3000}:${DOCKER_TARGET:-production == 'development' && '5173' || '8080'}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
+      - VITE_ENVIRONMENT=${VITE_ENVIRONMENT:-production}
+      - VITE_LOG_LEVEL=${VITE_LOG_LEVEL:-1}
+    volumes:
+      # Development only - mount source code
+      - ${DOCKER_TARGET:-production == 'development' && './src:/app/src' || '/dev/null:/dev/null'}
+      - ${DOCKER_TARGET:-production == 'development' && './public:/app/public' || '/dev/null:/dev/null'}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${DOCKER_TARGET:-production == 'development' && '5173' || '8080'}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - viralclips-network
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+      - ./docker/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - viralclips-network
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - viralclips-network
+
+  # Grafana for monitoring dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+    networks:
+      - viralclips-network
+
+  # Log aggregation with Loki
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./docker/loki.yml:/etc/loki/local-config.yaml
+      - loki-data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - viralclips-network
+
+  # Log shipping with Promtail
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./docker/promtail.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    networks:
+      - viralclips-network
+
+  # Nginx reverse proxy (production only)
+  nginx-proxy:
+    image: nginx:alpine
+    ports:
+      - "${PROXY_PORT:-80}:80"
+      - "${PROXY_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx-proxy.conf:/etc/nginx/nginx.conf
+      - ./docker/ssl:/etc/nginx/ssl
+    restart: unless-stopped
+    depends_on:
+      - app
+    networks:
+      - viralclips-network
+    profiles:
+      - production
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+
+networks:
+  viralclips-network:
+    driver: bridge

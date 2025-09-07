@@ -1,0 +1,46 @@
+{
+  "name": "creator-clip-ai-autoscaler",
+  "version": "1.0.0",
+  "description": "Auto-scaling service for Creator Clip AI application",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "autoscaling",
+    "docker",
+    "monitoring",
+    "microservices"
+  ],
+  "author": "Creator Clip AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ioredis": "^5.3.2",
+    "node-fetch": "^3.3.2",
+    "winston": "^3.11.0",
+    "prometheus-gc-stats": "^0.6.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creator-clip-ai/autoscaler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/creator-clip-ai/autoscaler/issues"
+  },
+  "homepage": "https://github.com/creator-clip-ai/autoscaler#readme"
+}

@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Check, Star } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const plans = [
   {
@@ -73,8 +75,29 @@ const plans = [
 ];
 
 const PricingSection = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handlePlanSelect = (plan: typeof plans[number]) => {
+    if (plan.name === 'Free') {
+      // Free plan - direct to auth or dashboard
+      navigate(user ? '/dashboard' : '/auth');
+    } else if (plan.name === 'Enterprise' || plan.cta === 'Contact Sales') {
+      // Enterprise plan - scroll to contact or redirect to pricing page
+      const contactSection = document.getElementById('contact');
+      if (contactSection) {
+        contactSection.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        navigate('/pricing');
+      }
+    } else {
+      // Paid plans - go to pricing page for detailed view
+      navigate('/pricing');
+    }
+  };
+
   return (
-    <section className="py-24">
+    <section id="pricing" className="py-24">
       <div className="container mx-auto px-6">
         <div className="text-center space-y-4 mb-16">
           <h2 className="text-4xl lg:text-5xl font-bold">
@@ -128,6 +151,7 @@ const PricingSection = () => {
                   variant={plan.variant} 
                   className="w-full"
                   size="lg"
+                  onClick={() => handlePlanSelect(plan)}
                 >
                   {plan.cta}
                 </Button>

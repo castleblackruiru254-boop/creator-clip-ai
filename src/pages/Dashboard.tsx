@@ -1,11 +1,13 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { Navigate, useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Video, Upload, Play, BarChart3, LogOut, User, Settings, Zap } from "lucide-react";
+import { Video, Upload, Play, BarChart3, LogOut, User, Settings, ChevronDown, ChevronRight, Download, ExternalLink, Clock, Star, Loader2, Crown, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ProcessingProgress, ProcessingMonitor } from "@/components/video-processing/ProcessingProgress";
+import { useVideoQueue, useVideoProcessor } from "@/hooks/use-video-queue";
 
 interface Profile {
   id: string;
@@ -21,14 +23,21 @@ interface Project {
   description: string | null;
   status: string;
   created_at: string;
-  user_id: string;
+  source_video_url?: string;
+  source_video_duration?: number;
 }
 
 interface Clip {
   id: string;
-  project_id: string;
   title: string;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  duration: number;
+  platform: string | null;
+  ai_score: number | null;
   status: string;
+  start_time: number;
+  end_time: number;
   created_at: string;
 }
 
@@ -37,18 +46,16 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [projectClips, setProjectClips] = useState<{ [key: string]: Clip[] }>({});
   const [loadingData, setLoadingData] = useState(true);
+  const [loadingClips, setLoadingClips] = useState<string | null>(null);
+  const [showQueue, setShowQueue] = useState(false);
   const { toast } = useToast();
+  const { activeJobs } = useVideoQueue();
+  const { processVideo, processing } = useVideoProcessor();
 
-  useEffect(() => {
-    if (user) {
-      fetchUserData();
-      setupRealtimeSubscriptions();
-    }
-  }, [user]);
-
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
       // Fetch user profile
       const { data: profileData, error: profileError } = await supabase
@@ -70,116 +77,84 @@ const Dashboard = () => {
       if (projectsError) throw projectsError;
       setProjects(projectsData || []);
 
-      // Fetch user clips
-      const { data: clipsData, error: clipsError } = await supabase
-        .from('clips')
-        .select(`
-          id,
-          project_id,
-          title,
-          status,
-          created_at,
-          projects!inner(user_id)
-        `)
-        .eq('projects.user_id', user!.id)
-        .order('created_at', { ascending: false });
-
-      if (clipsError) throw clipsError;
-      setClips(clipsData || []);
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Failed to fetch user data:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Failed to load user data",
         variant: "destructive",
       });
     } finally {
       setLoadingData(false);
     }
+  }, [user, toast]);
+
+  const fetchProjectClips = async (projectId: string) => {
+    // Check if already loading or loaded
+    if (loadingClips === projectId || projectClips[projectId]) return;
+    
+    setLoadingClips(projectId);
+    try {
+      const { data: clipsData, error: clipsError } = await supabase
+        .from('clips')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('ai_score', { ascending: false });
+
+      if (clipsError) throw clipsError;
+      
+      setProjectClips(prev => ({
+        ...prev,
+        [projectId]: clipsData || []
+      }));
+    } catch (error) {
+      console.error('Failed to fetch project clips:', error);
+      toast({
+        title: "Error loading clips",
+        description: error instanceof Error ? error.message : "Failed to load clips",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingClips(null);
+    }
   };
 
-  const setupRealtimeSubscriptions = () => {
-    // Subscribe to profile changes
-    const profileChannel = supabase
-      .channel('profile-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user!.id}`
-        },
-        (payload) => setProfile(payload.new as Profile)
-      )
-      .subscribe();
+  useEffect(() => {
+    if (user) {
+      fetchUserData();
+    }
+  }, [user, fetchUserData]);
 
-    // Subscribe to project changes
-    const projectsChannel = supabase
-      .channel('project-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'projects',
-          filter: `user_id=eq.${user!.id}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setProjects(prev => [payload.new as Project, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setProjects(prev => 
-              prev.map(p => p.id === payload.new.id ? payload.new as Project : p)
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setProjects(prev => prev.filter(p => p.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
+  const toggleProjectExpansion = async (projectId: string) => {
+    if (selectedProject === projectId) {
+      setSelectedProject(null);
+    } else {
+      setSelectedProject(projectId);
+      await fetchProjectClips(projectId);
+    }
+  };
 
-    // Subscribe to clip changes
-    const clipsChannel = supabase
-      .channel('clip-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'clips'
-        },
-        async (payload) => {
-          // Check if this clip belongs to user's project
-          const projectId = (payload.new as any)?.project_id || (payload.old as any)?.project_id;
-          if (!projectId) return;
+  const formatDuration = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
-          const { data: projectData } = await supabase
-            .from('projects')
-            .select('user_id')
-            .eq('id', projectId)
-            .single();
+  const getPlatformIcon = (platform: string | null) => {
+    switch (platform) {
+      case 'tiktok': return '📱';
+      case 'youtube_shorts': return '▶️';
+      case 'instagram_reels': return '📸';
+      default: return '🎬';
+    }
+  };
 
-          if (projectData?.user_id === user!.id) {
-            if (payload.eventType === 'INSERT') {
-              setClips(prev => [payload.new as Clip, ...prev]);
-            } else if (payload.eventType === 'UPDATE') {
-              setClips(prev => 
-                prev.map(c => c.id === (payload.new as any).id ? payload.new as Clip : c)
-              );
-            } else if (payload.eventType === 'DELETE') {
-              setClips(prev => prev.filter(c => c.id !== (payload.old as any).id));
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    // Cleanup function
-    return () => {
-      supabase.removeChannel(profileChannel);
-      supabase.removeChannel(projectsChannel);
-      supabase.removeChannel(clipsChannel);
-    };
+  const getAIScoreColor = (score: number | null) => {
+    if (!score) return 'bg-gray-100 text-gray-600';
+    if (score >= 0.9) return 'bg-green-100 text-green-800';
+    if (score >= 0.8) return 'bg-blue-100 text-blue-800';
+    if (score >= 0.7) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
   };
 
   const handleSignOut = async () => {
@@ -189,10 +164,11 @@ const Dashboard = () => {
         title: "Signed out",
         description: "You've been signed out successfully.",
       });
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Sign out failed:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Sign out failed",
         variant: "destructive",
       });
     }
@@ -216,12 +192,12 @@ const Dashboard = () => {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-r from-primary to-accent rounded-lg flex items-center justify-center">
                 <Video className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-bold">ViralClips</span>
-            </div>
+            </Link>
             
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm">
@@ -232,6 +208,13 @@ const Dashboard = () => {
                   {profile?.credits_remaining} credits
                 </span>
               </div>
+              
+              {profile?.subscription_tier === 'free' && (
+                <Button variant="hero" size="sm" onClick={() => navigate('/pricing')}>
+                  <Crown className="w-4 h-4 mr-2" />
+                  Upgrade
+                </Button>
+              )}
               
               <Button variant="ghost" size="sm">
                 <Settings className="w-4 h-4 mr-2" />
@@ -267,55 +250,71 @@ const Dashboard = () => {
             <CardContent>
               <div className="text-2xl font-bold">{projects.length}</div>
               <p className="text-xs text-muted-foreground">
-                Live count
+                +2 from last month
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Clips</CardTitle>
-              <Zap className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{clips.length}</div>
+              <div className="text-2xl font-bold">{activeJobs.length}</div>
               <p className="text-xs text-muted-foreground">
-                Generated clips
+                Currently processing
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Credits</CardTitle>
+              <CardTitle className="text-sm font-medium">Credits Remaining</CardTitle>
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{profile?.credits_remaining}</div>
               <p className="text-xs text-muted-foreground">
-                Available now
+                Resets monthly
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Plan</CardTitle>
+              <CardTitle className="text-sm font-medium">Subscription</CardTitle>
               <User className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold capitalize">{profile?.subscription_tier}</div>
               <p className="text-xs text-muted-foreground">
-                Current tier
+                {profile?.subscription_tier === 'free' ? 'Upgrade for more features' : 'Active plan'}
               </p>
             </CardContent>
           </Card>
         </div>
 
+        {/* Active Processing Jobs */}
+        {activeJobs.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Active Processing Jobs</h2>
+              <Button variant="outline" onClick={() => setShowQueue(!showQueue)}>
+                <Activity className="w-4 h-4 mr-2" />
+                {showQueue ? 'Hide Queue' : 'Show Queue'}
+              </Button>
+            </div>
+            {showQueue && (
+              <ProcessingProgress className="mb-6" />
+            )}
+          </div>
+        )}
+
         {/* Quick Actions */}
         <div className="mb-8">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
               <CardContent className="p-6 text-center">
                 <Upload className="w-12 h-12 mx-auto mb-4 text-primary group-hover:scale-110 transition-transform" />
@@ -332,6 +331,16 @@ const Dashboard = () => {
                 <h3 className="font-semibold mb-2">Quick Generate</h3>
                 <p className="text-sm text-muted-foreground">
                   AI-powered clip generation from YouTube videos
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setShowQueue(true)}>
+              <CardContent className="p-6 text-center">
+                <Activity className="w-12 h-12 mx-auto mb-4 text-blue-500 group-hover:scale-110 transition-transform" />
+                <h3 className="font-semibold mb-2">Processing Queue</h3>
+                <p className="text-sm text-muted-foreground">
+                  Monitor video processing progress
                 </p>
               </CardContent>
             </Card>
@@ -359,55 +368,179 @@ const Dashboard = () => {
                 <p className="text-muted-foreground mb-4">
                   Upload your first video to start creating viral clips!
                 </p>
-                <Button variant="hero">
+                <Button variant="hero" onClick={() => navigate('/quick-generate')}>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Video
+                  Start Creating
                 </Button>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4">
-              {projects.map((project) => (
-                <Card key={project.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">{project.title}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {project.description || 'No description'}
-                        </p>
-                        <div className="flex items-center gap-4 mt-1">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(project.created_at).toLocaleDateString()}
+            <div className="space-y-4">
+              {projects.map((project) => {
+                const clips = projectClips[project.id] || [];
+                const isExpanded = selectedProject === project.id;
+                const canExpand = project.status === 'completed';
+                
+                return (
+                  <Card key={project.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      {/* Real-time processing monitor for active projects */}
+                      {project.status === 'processing' && (
+                        <ProcessingMonitor projectId={project.id} className="mb-4" />
+                      )}
+                      
+                      {/* Project Header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-lg">{project.title}</h3>
+                            <span className={`px-2 py-1 rounded-full text-xs capitalize ${
+                              project.status === 'completed' 
+                                ? 'bg-success/10 text-success' 
+                                : project.status === 'processing'
+                                ? 'bg-warning/10 text-warning'
+                                : project.status === 'failed'
+                                ? 'bg-destructive/10 text-destructive'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {project.status}
+                            </span>
+                            {project.status === 'completed' && clips.length > 0 && (
+                              <span className="bg-primary/10 text-primary px-2 py-1 rounded-full text-xs">
+                                {clips.length} clips generated
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {project.description || 'No description'}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            {clips.filter(c => c.project_id === project.id).length} clips
-                          </p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                            <span>Created {new Date(project.created_at).toLocaleDateString()}</span>
+                            {project.source_video_duration && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatDuration(project.source_video_duration)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {project.source_video_url && (
+                            <Button variant="ghost" size="sm" onClick={() => window.open(project.source_video_url, '_blank')}>
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              Source
+                            </Button>
+                          )}
+                          
+                          {canExpand && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => toggleProjectExpansion(project.id)}
+                            >
+                              {loadingClips === project.id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : isExpanded ? (
+                                <ChevronDown className="w-4 h-4 mr-2" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 mr-2" />
+                              )}
+                              {isExpanded ? 'Hide Clips' : 'View Clips'}
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs capitalize relative ${
-                          project.status === 'completed' 
-                            ? 'bg-success/10 text-success' 
-                            : project.status === 'processing'
-                            ? 'bg-warning/10 text-warning animate-pulse'
-                            : project.status === 'failed'
-                            ? 'bg-destructive/10 text-destructive'
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {project.status === 'processing' && (
-                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full animate-ping"></div>
+
+                      {/* Clips Section */}
+                      {isExpanded && clips.length > 0 && (
+                        <div className="border-t pt-6 mt-4">
+                          <h4 className="font-medium mb-4 flex items-center gap-2">
+                            <Star className="w-4 h-4 text-yellow-500" />
+                            Generated Clips (sorted by AI score)
+                          </h4>
+                          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {clips.map((clip) => (
+                              <Card key={clip.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                                {clip.thumbnail_url && (
+                                  <div className="relative aspect-video">
+                                    <img 
+                                      src={clip.thumbnail_url} 
+                                      alt={clip.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute bottom-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs">
+                                      {formatDuration(clip.duration)}
+                                    </div>
+                                    <div className="absolute top-2 left-2 flex items-center gap-1">
+                                      <span className={`px-2 py-1 rounded text-xs ${getAIScoreColor(clip.ai_score)}`}>
+                                        {clip.ai_score ? (clip.ai_score * 100).toFixed(0) : 'N/A'}% viral
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                                <CardContent className="p-4">
+                                  <h5 className="font-medium text-sm line-clamp-2 mb-2">
+                                    {clip.title}
+                                  </h5>
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
+                                    <span className="flex items-center gap-1">
+                                      <span>{getPlatformIcon(clip.platform)}</span>
+                                      {clip.platform?.replace('_', ' ') || 'All platforms'}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      {clip.start_time}s-{clip.end_time}s
+                                    </span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {clip.video_url && (
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="flex-1"
+                                        onClick={() => window.open(clip.video_url!, '_blank')}
+                                      >
+                                        <Play className="w-3 h-3 mr-1" />
+                                        Play
+                                      </Button>
+                                    )}
+                                    <Button 
+                                      variant="secondary" 
+                                      size="sm" 
+                                      className="flex-1"
+                                    >
+                                      <Download className="w-3 h-3 mr-1" />
+                                      Download
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                          
+                          {clips.length === 0 && (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <Video className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                              <p>No clips found for this project</p>
+                            </div>
                           )}
-                          {project.status}
-                        </span>
-                        <Button variant="ghost" size="sm">
-                          View
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        </div>
+                      )}
+                      
+                      {/* Show clips count for completed projects */}
+                      {!isExpanded && project.status === 'completed' && clips.length > 0 && (
+                        <div className="border-t pt-4 mt-4">
+                          <div className="flex items-center justify-center text-sm text-muted-foreground">
+                            <Video className="w-4 h-4 mr-2" />
+                            {clips.length} clips ready • Click "View Clips" to see them
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>

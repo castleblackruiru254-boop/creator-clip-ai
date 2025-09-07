@@ -11,3 +11,9 @@ verify_jwt = true
 
 [functions.youtube-search]
 verify_jwt = true
+
+[functions.process-youtube-url]
+verify_jwt = true
+
+[functions.generate-clips]
+verify_jwt = true

@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Video, Mail, Lock, User, Github, Chrome } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { SignUpSchema, SignInSchema, validateAndSanitize } from "@/lib/validation";
 
 interface AuthFormProps {
   onSuccess?: () => void;
@@ -39,14 +40,18 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
     setError("");
 
     try {
+      // Validate input data
+      const schema = isSignUp ? SignUpSchema : SignInSchema;
+      const validatedData = validateAndSanitize(schema, formData);
+
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
+          email: validatedData.email,
+          password: validatedData.password,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
             data: {
-              full_name: formData.fullName,
+              full_name: validatedData.fullName,
             }
           }
         });
@@ -59,8 +64,8 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
         });
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password,
+          email: validatedData.email,
+          password: validatedData.password,
         });
 
         if (error) throw error;
@@ -71,8 +76,9 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
         });
         onSuccess?.();
       }
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -88,8 +94,9 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
         }
       });
       if (error) throw error;
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+      setError(errorMessage);
       setLoading(false);
     }
   };

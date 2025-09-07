@@ -1,10 +1,31 @@
 import { Button } from "@/components/ui/button";
 import { Play, Video, Wand2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import heroImage from "@/assets/hero-image.jpg";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const HeroSection = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  const handleGetStarted = () => {
+    if (user) {
+      navigate('/quick-generate');
+    } else {
+      navigate('/auth');
+    }
+  };
+
+  const handleWatchDemo = () => {
+    // Scroll to demo section or show demo modal
+    const demoSection = document.getElementById('demo');
+    if (demoSection) {
+      demoSection.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // If no demo section, navigate to quick generate for demo
+      navigate('/quick-generate');
+    }
+  };
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-background via-card to-muted">
@@ -34,12 +55,12 @@ const HeroSection = () => {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="lg" className="group" onClick={() => navigate('/start-creating')}>
+              <Button variant="hero" size="lg" className="group" onClick={handleGetStarted}>
                 <Video className="w-5 h-5 mr-2 transition-transform group-hover:scale-110" />
-                Start Creating Free
+                {user ? 'Start Creating' : 'Start Creating Free'}
               </Button>
               
-              <Button variant="secondary" size="lg" className="group" onClick={() => navigate('/demo')}>
+              <Button variant="secondary" size="lg" className="group" onClick={handleWatchDemo}>
                 <Play className="w-5 h-5 mr-2 transition-transform group-hover:scale-110" />
                 Watch Demo
               </Button>

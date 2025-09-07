@@ -19,4 +19,9 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  define: {
+    // Prevent process errors in browser
+    'process.env': {},
+    global: 'globalThis',
+  },
 }));
