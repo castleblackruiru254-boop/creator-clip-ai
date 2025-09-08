@@ -25,7 +25,7 @@ interface AssetManifest {
 }
 
 class CDNManager {
-  private config: CDNConfig;
+  public config: CDNConfig;
   private manifest: AssetManifest = {};
   private failedAssets: Set<string> = new Set();
   private preloadedAssets: Set<string> = new Set();

@@ -94,7 +94,7 @@ class DatabaseConnectionPool {
     return client;
   }
 
-  release(client: SupabaseClient): void {
+  release(_client: SupabaseClient): void {
     // For shared client, we don't need to do anything special
     logger.debug('Released shared database connection', {
       component: 'database-pool',

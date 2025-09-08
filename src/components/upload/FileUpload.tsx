@@ -88,7 +88,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     const quotaCheck = await fileStorageService.checkStorageQuota(user.id, file.size);
     if (!quotaCheck.hasQuota) {
       throw new Error(quotaCheck.message || 'Insufficient storage space');
-    }
+          throw new Error('Storage quota exceeded');
 
     const filePath = `uploads/${user.id}/${Date.now()}-${file.name}`;
 
