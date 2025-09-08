@@ -51,11 +51,30 @@ const StorageManager: React.FC<StorageManagerProps> = ({
 
     try {
       setLoading(true);
-      const result = await fileStorageService.listUserFiles(user.id, {
-        bucket: bucketFilter,
+      const result = await fileStorageService.listFiles(bucketFilter || 'video-uploads', {
         limit: 50
       });
-      setFiles(result.files);
+      
+      // Convert the result to FileMetadata format
+      const fileMetadata: FileMetadata[] = result.files.map(file => ({
+        id: file.id || file.name,
+        fileName: file.name,
+        fileType: file.metadata?.mimetype || 'application/octet-stream',
+        fileSize: file.metadata?.size || 0,
+        filePath: file.name,
+        bucket: bucketFilter || 'video-uploads',
+        uploadedAt: file.created_at || new Date().toISOString(),
+        uploadedBy: user.id,
+        lastModified: file.updated_at || file.created_at || new Date().toISOString(),
+        status: 'completed',
+        name: file.name,
+        size: file.metadata?.size || 0,
+        type: file.metadata?.mimetype || 'application/octet-stream',
+        url: `https://uhqlwmucjhnpyvgxtupw.supabase.co/storage/v1/object/public/${bucketFilter || 'video-uploads'}/${file.name}`,
+        isTemporary: false
+      }));
+      
+      setFiles(fileMetadata);
     } catch (error) {
       console.error('Failed to load files:', error);
       toast({
@@ -72,7 +91,7 @@ const StorageManager: React.FC<StorageManagerProps> = ({
     if (!user) return;
 
     try {
-      const quota = await fileStorageService.getStorageUsage(user.id);
+      const quota = await fileStorageService.checkStorageQuota();
       setStorageQuota(quota);
     } catch (error) {
       console.error('Failed to load storage quota:', error);
@@ -84,9 +103,9 @@ const StorageManager: React.FC<StorageManagerProps> = ({
 
     try {
       setDeleting(file.id);
-      const success = await fileStorageService.deleteFile(file.id, file.bucket, user.id);
+      const result = await fileStorageService.deleteFile(file.filePath, file.bucket);
       
-      if (success) {
+      if (result.success) {
         setFiles(prev => prev.filter(f => f.id !== file.id));
         setSelectedFiles(prev => {
           const newSet = new Set(prev);
@@ -100,7 +119,7 @@ const StorageManager: React.FC<StorageManagerProps> = ({
           description: `${file.name} has been deleted successfully.`
         });
       } else {
-        throw new Error('Failed to delete file');
+        throw new Error(result.error || 'Failed to delete file');
       }
     } catch (error) {
       console.error('Failed to delete file:', error);
@@ -124,8 +143,8 @@ const StorageManager: React.FC<StorageManagerProps> = ({
 
       for (const file of filesToDelete) {
         try {
-          const success = await fileStorageService.deleteFile(file.id, file.bucket, user.id);
-          if (success) {
+          const result = await fileStorageService.deleteFile(file.filePath, file.bucket);
+          if (result.success) {
             deleted++;
           } else {
             failed++;
@@ -222,15 +241,15 @@ const StorageManager: React.FC<StorageManagerProps> = ({
                 <span>Limit: {formatFileSize(storageQuota.limit)}</span>
               </div>
               <Progress 
-                value={storageQuota.percentage} 
-                className={`h-2 ${getQuotaColor(storageQuota.percentage)}`}
+                value={storageQuota.percentage || 0} 
+                className={`h-2 ${getQuotaColor(storageQuota.percentage || 0)}`}
               />
               <div className="text-xs text-muted-foreground">
-                {storageQuota.percentage.toFixed(1)}% of storage used
+                {(storageQuota.percentage || 0).toFixed(1)}% of storage used
               </div>
             </div>
 
-            {storageQuota.percentage >= 90 && (
+            {(storageQuota.percentage || 0) >= 90 && (
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
@@ -325,11 +344,11 @@ const StorageManager: React.FC<StorageManagerProps> = ({
                     />
 
                     <div className="flex items-center gap-2">
-                      {getFileIcon(file.type)}
+                      {getFileIcon(file.type || '')}
                       <div>
-                        <div className="font-medium">{file.name}</div>
+                        <div className="font-medium">{file.name || file.fileName}</div>
                         <div className="text-sm text-muted-foreground">
-                          {formatFileSize(file.size)} • {file.bucket}
+                          {formatFileSize(file.size || file.fileSize || 0)} • {file.bucket}
                           {file.isTemporary && ' • Temporary'}
                         </div>
                       </div>
@@ -339,7 +358,7 @@ const StorageManager: React.FC<StorageManagerProps> = ({
                       {getStatusBadge(file.status)}
                       
                       <div className="text-xs text-muted-foreground">
-                        {new Date(file.uploadedAt).toLocaleDateString()}
+                        {new Date(file.uploadedAt || '').toLocaleDateString()}
                       </div>
 
                       {file.expiresAt && (
@@ -362,7 +381,10 @@ const StorageManager: React.FC<StorageManagerProps> = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => window.open(file.url, '_blank')}
+                          onClick={() => {
+                            const url = file.url || '';
+                            if (url) window.open(url, '_blank');
+                          }}
                         >
                           <Download className="w-4 h-4" />
                         </Button>

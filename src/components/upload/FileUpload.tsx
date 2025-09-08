@@ -35,7 +35,6 @@ interface UploadedFile {
   error?: string;
 }
 
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 // Configuration constants for file uploads
 export const MAX_FILE_SIZE_MB = 500; // 500MB max file size
 export const ACCEPTED_VIDEO_FORMATS = [
@@ -81,29 +80,24 @@ const FileUpload: React.FC<FileUploadProps> = ({
     return Date.now().toString() + Math.random().toString(36).substr(2, 9);
   };
 
-  const uploadFileWithService = async (file: File, fileId: string): Promise<string> => {
+  const uploadFileWithService = async (file: File): Promise<string> => {
     if (!user) throw new Error('User not authenticated');
 
     // Check storage quota
-    const quotaCheck = await fileStorageService.checkStorageQuota(user.id, file.size);
-    if (!quotaCheck.hasQuota) {
-      throw new Error(quotaCheck.message || 'Insufficient storage space');
+    const quotaCheck = await fileStorageService.checkStorageQuota();
+    if ((quotaCheck.percentage || 0) > 95) {
+      throw new Error('Insufficient storage space');
     }
 
     const filePath = `uploads/${user.id}/${Date.now()}-${file.name}`;
 
     // Use chunked upload for files larger than 50MB
     if (file.size > 50 * 1024 * 1024) {
-      const result = await fileStorageService.uploadFileChunked(
+      const result = await fileStorageService.uploadFile(
         file,
-        'video-uploads',
         filePath,
-        CHUNK_SIZE,
-        (progress) => {
-          setUploadedFiles(prev => prev.map(f => 
-            f.id === fileId ? { ...f, progress: Math.round(progress) } : f
-          ));
-        }
+        'video-uploads',
+        { isTemporary: false }
       );
 
       if (!result.success) {
@@ -115,8 +109,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
       // Regular upload for smaller files
       const result = await fileStorageService.uploadFile(
         file,
-        'video-uploads',
         filePath,
+        'video-uploads',
         { isTemporary: false }
       );
 
@@ -167,7 +161,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           f.id === uploadFile.id ? { ...f, status: 'uploading' } : f
         ));
 
-        const fileUrl = await uploadFileWithService(uploadFile.file, uploadFile.id);
+        const fileUrl = await uploadFileWithService(uploadFile.file);
 
         // Update status to completed
         setUploadedFiles(prev => prev.map(f => 

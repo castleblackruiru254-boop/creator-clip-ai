@@ -1,40 +1,34 @@
 import { supabase } from '@/integrations/supabase/client';
-import { logger } from './logger';
+import { logger } from '@/lib/logger';
 
+// Interface definitions for file storage operations
 export interface FileMetadata {
   id: string;
   fileName: string;
   fileType: string;
   fileSize: number;
   filePath: string;
-  uploadedBy: string;
+  bucket: string;
   uploadedAt: string;
+  uploadedBy: string;
   lastModified: string;
-  checksum?: string;
-  compressed?: boolean;
-  compressionRatio?: number;
-  thumbnailPath?: string;
-  metadata?: Record<string, any>;
-  // Additional properties expected by components
-  name?: string;
-  bucket?: string;
-  type?: string;
-  size?: number;
-  status?: string;
+  status: 'uploading' | 'processing' | 'completed' | 'error' | 'cleanup';
+  // Additional properties for compatibility
+  name: string;
+  size: number;
+  type: string;
+  url?: string;
   isTemporary?: boolean;
   expiresAt?: string;
-  url?: string;
 }
 
 export interface UploadOptions {
-  compress?: boolean;
-  generateThumbnail?: boolean;
-  allowedTypes?: string[];
-  maxSize?: number;
-  customMetadata?: Record<string, any>;
   overwrite?: boolean;
-  chunkSize?: number;
   isTemporary?: boolean;
+  maxSize?: number;
+  allowedTypes?: string[];
+  generateThumbnail?: boolean;
+  metadata?: Record<string, any>;
 }
 
 export interface UploadResult {
@@ -43,8 +37,8 @@ export interface UploadResult {
   filePath?: string;
   publicUrl?: string;
   fileUrl?: string;
-  metadata?: FileMetadata;
   error?: string;
+  metadata?: FileMetadata;
 }
 
 export interface DownloadOptions {
@@ -52,9 +46,9 @@ export interface DownloadOptions {
     width?: number;
     height?: number;
     quality?: number;
-    format?: 'jpeg' | 'png' | 'webp';
+    format?: string;
   };
-  expires?: number;
+  expiresIn?: number;
 }
 
 export interface StorageStats {
@@ -72,7 +66,8 @@ export interface StorageQuota {
   percentage?: number;
 }
 
-class FileStorageService {
+// Service classes and utility functions
+export class FileStorageService {
   private readonly CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
   private readonly MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB max
 
@@ -282,7 +277,7 @@ class FileStorageService {
   /**
    * Get file metadata
    */
-  async getFileMetadata(filePath: string): Promise<FileMetadata | null> {
+  async getFileMetadata(): Promise<FileMetadata | null> {
     return null; // Mock implementation
   }
 
@@ -298,10 +293,10 @@ class FileStorageService {
   };
 
   // Private helper methods
-  private validateFile(
+  private validateFile = (
     file: File | Blob,
     options: UploadOptions
-  ): { valid: boolean; error?: string } {
+  ): { valid: boolean; error?: string } => {
     // Check file size
     if (file.size > (options.maxSize || this.MAX_FILE_SIZE)) {
       return {
@@ -313,22 +308,18 @@ class FileStorageService {
     return { valid: true };
   }
 
-  private isImageFile(filePath: string): boolean {
+  private isImageFile = (filePath: string): boolean => {
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
     return imageExtensions.some(ext => filePath.toLowerCase().endsWith(ext));
   }
 }
 
-// Export singleton instance
-export const fileStorage = new FileStorageService();
-export const fileStorageService = fileStorage;
+// Create singleton instance
+export const fileStorageService = new FileStorageService();
 
-// Export individual methods for easier testing
-export const {
-  uploadFile,
-  downloadFile,
-  deleteFile,
-  listFiles,
-  getFileMetadata,
-  getStorageStats,
-} = fileStorage;
+// Export individual methods for convenience
+export const { uploadFile, downloadFile, deleteFile, listFiles, checkStorageQuota, formatFileSize } = fileStorageService;
+
+// Legacy exports for compatibility
+export const fileStorage = fileStorageService;
+export default fileStorageService;
