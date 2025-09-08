@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { vi } from 'vitest'
 import { useAuth } from '@/contexts/AuthContext'
 import PricingSection from '../PricingSection'
 import { mockUser } from '@/test/utils'
@@ -20,7 +21,7 @@ vi.mock('react-router-dom', async () => {
 })
 
 describe('PricingSection', () => {
-  const mockUseAuth = useAuth as vi.MockedFunction<typeof useAuth>
+  const mockUseAuth = useAuth as any;
 
   beforeEach(() => {
     vi.clearAllMocks()

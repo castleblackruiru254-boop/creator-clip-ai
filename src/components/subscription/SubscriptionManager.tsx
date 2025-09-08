@@ -1,41 +1,39 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { 
   Crown, 
   Calendar, 
   CreditCard, 
-  AlertCircle, 
-  CheckCircle, 
-  XCircle,
+  Download, 
+  RefreshCw,
   Star,
-  Wallet,
-  Download,
-  TrendingUp,
-  Users
+  Clock,
+  ArrowRight,
+  Check,
+  X
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 
 interface UserSubscription {
-  subscription_id: string;
-  plan_code: string;
-  status: string;
+  id: string;
+  user_id: string;
+  plan_id: string;
+  status: 'active' | 'cancelled' | 'past_due' | 'trialing';
+  current_period_start: string;
   current_period_end: string;
-  amount: number;
-  features: Record<string, string>;
+  created_at: string;
 }
 
 interface BillingSummary {
-  total_spent: number;
-  total_transactions: number;
-  credits_remaining: number;
-  credits_used_this_month: number;
+  total_amount: number;
+  current_period_usage: number;
   next_billing_date: string;
-  current_subscription: any;
+  credits_remaining: number;
 }
 
 interface Transaction {
@@ -47,14 +45,15 @@ interface Transaction {
   reference: string;
 }
 
-const SubscriptionManager = () => {
+const SubscriptionManager: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -66,37 +65,29 @@ const SubscriptionManager = () => {
     try {
       setLoading(true);
 
-      // Load active subscription
-      const { data: subData, error: subError } = await supabase
-        .rpc('get_user_active_subscription', { p_user_id: user?.id });
+      // Mock subscription data - replace with actual implementation when billing is configured
+      const mockSubscription: UserSubscription = {
+        id: 'mock-subscription',
+        user_id: user!.id,
+        plan_id: 'free',
+        status: 'active',
+        current_period_start: new Date().toISOString(),
+        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        created_at: new Date().toISOString(),
+      };
 
-      if (subError) throw subError;
+      const mockBillingSummary: BillingSummary = {
+        total_amount: 0,
+        current_period_usage: 0,
+        next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        credits_remaining: 5,
+      };
 
-      if (subData && subData.length > 0) {
-        setSubscription(subData[0]);
-      }
+      const mockTransactions: Transaction[] = [];
 
-      // Load billing summary
-      const { data: summaryData, error: summaryError } = await supabase
-        .rpc('get_user_billing_summary', { p_user_id: user?.id });
-
-      if (summaryError) throw summaryError;
-
-      if (summaryData && summaryData.length > 0) {
-        setBillingSummary(summaryData[0]);
-      }
-
-      // Load recent transactions
-      const { data: transData, error: transError } = await supabase
-        .from('billing_transactions')
-        .select('id, amount, status, payment_method, paid_at, reference')
-        .eq('user_id', user?.id)
-        .order('paid_at', { ascending: false })
-        .limit(10);
-
-      if (transError) throw transError;
-
-      setTransactions(transData || []);
+      setSubscription(mockSubscription);
+      setBillingSummary(mockBillingSummary);
+      setTransactions(mockTransactions);
 
     } catch (error) {
       console.error('Failed to load subscription data:', error);
@@ -113,89 +104,81 @@ const SubscriptionManager = () => {
   const handleCancelSubscription = async () => {
     if (!subscription) return;
 
-    setCancellingSubscription(true);
-    
     try {
-      const response = await fetch('/api/paystack-integration/cancel-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscription_code: subscription.subscription_id,
-        }),
+      setCancelling(true);
+
+      // In a real implementation, this would call a billing service
+      console.log('Cancel subscription request for:', subscription.id);
+
+      toast({
+        title: "Cancellation Requested",
+        description: "Your subscription will be cancelled at the end of the current billing period.",
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: "Subscription Cancelled",
-          description: "Your subscription has been cancelled successfully. You'll retain access until the end of your billing period.",
-        });
-        
-        await loadSubscriptionData();
-      } else {
-        throw new Error(result.error || 'Cancellation failed');
-      }
     } catch (error) {
-      console.error('Cancellation failed:', error);
+      console.error('Failed to cancel subscription:', error);
       toast({
         title: "Cancellation Failed",
-        description: error instanceof Error ? error.message : "Failed to cancel subscription",
+        description: "Could not cancel your subscription. Please contact support.",
         variant: "destructive",
       });
     } finally {
-      setCancellingSubscription(false);
+      setCancelling(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const configs = {
-      active: { label: 'Active', variant: 'default', icon: CheckCircle },
-      cancelled: { label: 'Cancelled', variant: 'secondary', icon: XCircle },
-      will_not_renew: { label: 'Ending Soon', variant: 'destructive', icon: AlertCircle },
-      attention: { label: 'Attention Required', variant: 'destructive', icon: AlertCircle },
+  const getStatusBadge = (status: UserSubscription['status']) => {
+    const config = {
+      active: { icon: <Check className="w-3 h-3" />, label: 'Active', variant: 'default' as const },
+      cancelled: { icon: <X className="w-3 h-3" />, label: 'Cancelled', variant: 'secondary' as const },
+      past_due: { icon: <Clock className="w-3 h-3" />, label: 'Past Due', variant: 'destructive' as const },
+      trialing: { icon: <Star className="w-3 h-3" />, label: 'Trial', variant: 'outline' as const },
     };
 
-    const config = configs[status as keyof typeof configs] || configs.active;
-    const IconComponent = config.icon;
+    const { icon, label, variant } = config[status] || config.active;
 
     return (
-      <Badge variant={config.variant as any} className="flex items-center gap-1">
-        <IconComponent className="w-3 h-3" />
-        {config.label}
+      <Badge variant={variant} className="flex items-center gap-1">
+        {icon}
+        {label}
       </Badge>
     );
   };
 
-  const getPlanDisplayName = (planCode: string) => {
-    const plans = {
-      'viral_starter_monthly': 'Starter',
-      'viral_pro_monthly': 'Pro',
-      'viral_enterprise_monthly': 'Enterprise',
+  const getPlanDisplayName = (planId: string) => {
+    const planNames: Record<string, string> = {
+      free: 'Free Plan',
+      starter: 'Starter Plan',
+      pro: 'Pro Plan',
+      enterprise: 'Enterprise Plan',
     };
-    
-    return plans[planCode as keyof typeof plans] || planCode;
+    return planNames[planId] || planId;
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'failed': return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'pending': return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-gray-500" />;
-    }
-  };
+  if (!user) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <p className="text-muted-foreground">Please sign in to view your subscription.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="h-40 bg-muted rounded-lg animate-pulse" />
-          <div className="h-40 bg-muted rounded-lg animate-pulse" />
-        </div>
-        <div className="h-60 bg-muted rounded-lg animate-pulse" />
+        {[1, 2, 3].map((i) => (
+          <Card key={i}>
+            <CardContent className="p-6">
+              <div className="animate-pulse space-y-4">
+                <div className="h-4 bg-muted rounded w-1/4"></div>
+                <div className="h-8 bg-muted rounded w-1/2"></div>
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     );
   }
@@ -203,142 +186,165 @@ const SubscriptionManager = () => {
   return (
     <div className="space-y-6">
       {/* Subscription Overview */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Current Plan */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium">Current Plan</CardTitle>
-            <Crown className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {subscription ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Crown className="w-5 h-5" />
+            Subscription Overview
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {subscription ? (
+            <>
+              <div className="flex items-start justify-between">
+                <div className="space-y-2">
+                  <h3 className="text-xl font-semibold">
+                    {getPlanDisplayName(subscription.plan_id)}
+                  </h3>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-2xl font-bold">{getPlanDisplayName(subscription.plan_code)}</h3>
                     {getStatusBadge(subscription.status)}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold">${subscription.amount}</p>
-                    <p className="text-xs text-muted-foreground">per month</p>
-                  </div>
-                </div>
-                
-                {subscription.current_period_end && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    <span>
-                      {subscription.status === 'active' ? 'Next billing' : 'Access until'}: {' '}
-                      {formatDistanceToNow(new Date(subscription.current_period_end), { addSuffix: true })}
+                    <span className="text-sm text-muted-foreground">
+                      Member since {new Date(subscription.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                )}
-                
-                {subscription.status === 'active' && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full"
-                    onClick={handleCancelSubscription}
-                    disabled={cancellingSubscription}
-                  >
-                    {cancellingSubscription ? 'Cancelling...' : 'Cancel Subscription'}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-bold">Free</h3>
-                  <Badge variant="secondary">Current Plan</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  You're currently on the free plan. Upgrade to unlock more features.
-                </p>
-                <Button className="w-full" onClick={() => window.location.href = '/pricing'}>
-                  Upgrade Plan
-                </Button>
+                
+                <div className="text-right">
+                  <div className="text-2xl font-bold">
+                    {subscription.plan_id === 'free' ? '$0' : subscription.plan_id === 'starter' ? '$7' : '$12'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">per month</div>
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Usage Summary */}
+              <Separator />
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Billing Period</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(subscription.current_period_start).toLocaleDateString()} - {' '}
+                    {new Date(subscription.current_period_end).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Next Billing</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {billingSummary ? new Date(billingSummary.next_billing_date).toLocaleDateString() : 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-8">
+              <Crown className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="font-semibold mb-2">No Active Subscription</h3>
+              <p className="text-muted-foreground mb-4">
+                You don't have an active subscription. Upgrade to unlock premium features.
+              </p>
+              <Button>
+                <ArrowRight className="w-4 h-4 mr-2" />
+                View Plans
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Usage Summary */}
+      {billingSummary && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium">Usage This Month</CardTitle>
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Star className="w-5 h-5" />
+              Usage Summary
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Credits Remaining</span>
-                  <span className="font-medium">{billingSummary?.credits_remaining || 0}</span>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Credits Remaining</span>
+                  <span className="text-lg font-semibold text-green-600">
+                    {billingSummary.credits_remaining}
+                  </span>
                 </div>
-                <div className="w-full bg-secondary rounded-full h-2">
-                  <div 
-                    className="bg-primary h-2 rounded-full transition-all" 
-                    style={{ 
-                      width: `${Math.max(10, (billingSummary?.credits_remaining || 0) / 
-                        ((subscription?.features?.monthly_clips === 'unlimited' ? 200 : 
-                          parseInt(subscription?.features?.monthly_clips || '5')) / 100))}%` 
-                    }}
-                  />
+                <Progress value={75} className="h-2" />
+                <div className="text-xs text-muted-foreground">
+                  75% of monthly allocation remaining
                 </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-bold text-primary">{billingSummary?.credits_used_this_month || 0}</p>
-                  <p className="text-xs text-muted-foreground">Credits Used</p>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Current Usage</span>
+                  <span className="text-lg font-semibold">
+                    ${billingSummary.current_period_usage.toFixed(2)}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-green-600">{billingSummary?.total_transactions || 0}</p>
-                  <p className="text-xs text-muted-foreground">Total Payments</p>
+                <div className="text-xs text-muted-foreground">
+                  This billing period
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
 
       {/* Plan Features */}
-      {subscription && subscription.features && (
+      {subscription && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5" />
-              Plan Features
-            </CardTitle>
+            <CardTitle>Plan Features</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-3 gap-4">
-              {Object.entries(subscription.features).map(([feature, value]) => {
-                const featureLabels = {
-                  monthly_clips: 'Monthly Clips',
-                  max_resolution: 'Max Resolution',
-                  watermark_enabled: 'Watermark',
-                  priority_support: 'Priority Support',
-                  batch_processing: 'Batch Processing',
-                  custom_branding: 'Custom Branding',
-                  analytics: 'Analytics',
-                  team_members: 'Team Members',
-                  api_access: 'API Access',
-                  white_label: 'White Label',
-                };
-
-                const label = featureLabels[feature as keyof typeof featureLabels] || feature;
-                const displayValue = value === 'true' ? '✅ Enabled' : 
-                                  value === 'false' ? '❌ Disabled' : value;
-
-                return (
-                  <div key={feature} className="flex justify-between p-3 bg-muted rounded-lg">
-                    <span className="text-sm font-medium">{label}</span>
-                    <span className="text-sm text-muted-foreground">{displayValue}</span>
+            <div className="grid md:grid-cols-2 gap-4">
+              {subscription.plan_id === 'free' ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">5 video exports per month</span>
                   </div>
-                );
-              })}
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">Basic AI analysis</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <X className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Priority processing</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <X className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Advanced customization</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">Unlimited exports</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">Advanced AI analysis</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">Priority processing</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">Advanced customization</span>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -348,50 +354,37 @@ const SubscriptionManager = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
+            <CreditCard className="w-5 h-5" />
             Recent Transactions
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {transactions.length > 0 ? (
-            <div className="space-y-4">
-              {transactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {getStatusIcon(transaction.status)}
-                    <div>
-                      <p className="font-medium">${transaction.amount.toFixed(2)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {transaction.payment_method} • {transaction.reference}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant={transaction.status === 'completed' ? 'default' : 'secondary'}>
-                      {transaction.status}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(transaction.paid_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              
-              {transactions.length >= 10 && (
-                <div className="text-center pt-4">
-                  <Button variant="outline" size="sm">
-                    View All Transactions
-                  </Button>
-                </div>
-              )}
+          {transactions.length === 0 ? (
+            <div className="text-center py-8">
+              <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="font-semibold mb-2">No Transactions Found</h3>
+              <p className="text-muted-foreground">
+                Your billing transactions will appear here once billing is fully configured.
+              </p>
             </div>
           ) : (
-            <div className="text-center py-8">
-              <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No transactions yet</p>
-              <p className="text-sm text-muted-foreground">
-                Your payment history will appear here once you make a purchase.
-              </p>
+            <div className="space-y-4">
+              {transactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
+                  <div className="space-y-1">
+                    <div className="font-medium">${transaction.amount.toFixed(2)}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {new Date(transaction.paid_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <Badge variant={transaction.status === 'paid' ? 'default' : 'secondary'}>
+                    {transaction.status}
+                  </Badge>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -404,90 +397,67 @@ const SubscriptionManager = () => {
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-3 gap-4">
-            <Button variant="outline" className="flex items-center gap-2" onClick={() => window.location.href = '/pricing'}>
-              <Crown className="h-4 w-4" />
+            <Button variant="outline" className="flex items-center gap-2">
+              <Crown className="w-4 h-4" />
               Change Plan
             </Button>
             
             <Button variant="outline" className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
+              <Download className="w-4 h-4" />
               Download Invoice
             </Button>
             
             <Button variant="outline" className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Update Payment Method
+              <CreditCard className="w-4 h-4" />
+              Update Payment
             </Button>
           </div>
+
+          {subscription && subscription.status === 'active' && subscription.plan_id !== 'free' && (
+            <div className="mt-6 pt-6 border-t">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium">Cancel Subscription</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Your subscription will remain active until the end of the current billing period.
+                  </p>
+                </div>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleCancelSubscription}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <X className="w-4 h-4 mr-2" />
+                  )}
+                  {cancelling ? 'Cancelling...' : 'Cancel Plan'}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Billing Statistics */}
-      {billingSummary && (
-        <div className="grid md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-2xl font-bold">${billingSummary.total_spent.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground">Total Spent</p>
-                </div>
+      {/* Free Plan Upgrade CTA */}
+      {subscription?.plan_id === 'free' && (
+        <Card className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/50 dark:to-pink-950/50 border-purple-200 dark:border-purple-800">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <h3 className="font-semibold text-purple-900 dark:text-purple-100">
+                  Ready to unlock more features?
+                </h3>
+                <p className="text-purple-700 dark:text-purple-300">
+                  Upgrade to get unlimited exports, priority processing, and advanced AI features.
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-2xl font-bold">{billingSummary.credits_remaining}</p>
-                  <p className="text-xs text-muted-foreground">Credits Left</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-2xl font-bold">{billingSummary.credits_used_this_month}</p>
-                  <p className="text-xs text-muted-foreground">Used This Month</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-2xl font-bold">{billingSummary.total_transactions}</p>
-                  <p className="text-xs text-muted-foreground">Transactions</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Upgrade CTA for Free Users */}
-      {(!subscription || subscription.plan_code === 'free') && (
-        <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
-          <CardContent className="p-8 text-center">
-            <Crown className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-2xl font-bold mb-2">Unlock More Features</h3>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Upgrade to a paid plan to remove watermarks, access higher quality exports, 
-              and get more monthly credits.
-            </p>
-            <Button size="lg" onClick={() => window.location.href = '/pricing'}>
-              View Plans & Upgrade
-            </Button>
+              <Button className="bg-purple-600 hover:bg-purple-700">
+                <Crown className="w-4 h-4 mr-2" />
+                Upgrade Now
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

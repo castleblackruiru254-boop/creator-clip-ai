@@ -36,8 +36,9 @@ interface UploadedFile {
 }
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-const MAX_FILE_SIZE_MB = 500; // 500MB max file size
-const ACCEPTED_VIDEO_FORMATS = [
+// Configuration constants for file uploads
+export const MAX_FILE_SIZE_MB = 500; // 500MB max file size
+export const ACCEPTED_VIDEO_FORMATS = [
   'video/mp4',
   'video/quicktime',
   'video/x-msvideo',

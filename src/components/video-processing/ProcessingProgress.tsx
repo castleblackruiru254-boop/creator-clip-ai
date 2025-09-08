@@ -29,6 +29,71 @@ import {
 } from '@/hooks/use-video-queue';
 import { formatDuration } from '@/lib/video-validation';
 
+// Helper functions moved inside component scope to avoid scoping issues
+const getStatusIcon = (status: QueueJob['status']) => {
+  switch (status) {
+    case 'pending':
+      return <Clock className="w-4 h-4 text-yellow-500" />;
+    case 'processing':
+      return <Play className="w-4 h-4 text-blue-500 animate-pulse" />;
+    case 'completed':
+      return <CheckCircle className="w-4 h-4 text-green-500" />;
+    case 'failed':
+      return <XCircle className="w-4 h-4 text-red-500" />;
+    case 'cancelled':
+      return <Pause className="w-4 h-4 text-gray-500" />;
+    default:
+      return <AlertCircle className="w-4 h-4 text-gray-400" />;
+  }
+};
+
+const getStageIcon = (stage: string) => {
+  switch (stage) {
+    case 'download':
+      return <Download className="w-4 h-4" />;
+    case 'transcript':
+      return <FileText className="w-4 h-4" />;
+    case 'analysis':
+      return <BarChart3 className="w-4 h-4" />;
+    case 'processing':
+      return <Scissors className="w-4 h-4" />;
+    case 'upload':
+      return <Upload className="w-4 h-4" />;
+    default:
+      return <Clock className="w-4 h-4" />;
+  }
+};
+
+const getStatusColor = (status: QueueJob['status']) => {
+  switch (status) {
+    case 'pending':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'processing':
+      return 'bg-blue-100 text-blue-800';
+    case 'completed':
+      return 'bg-green-100 text-green-800';
+    case 'failed':
+      return 'bg-red-100 text-red-800';
+    case 'cancelled':
+      return 'bg-gray-100 text-gray-800';
+    default:
+      return 'bg-gray-100 text-gray-600';
+  }
+};
+
+const formatJobTitle = (job: QueueJob) => {
+  switch (job.type) {
+    case 'process_video':
+      return `Process: ${(job.payload as any)?.projectTitle || 'Video'}`;
+    case 'generate_clip':
+      return `Generate Clip`;
+    case 'generate_subtitles':
+      return `Generate Subtitles`;
+    default:
+      return job.type;
+  }
+};
+
 // Add useProcessingMonitor to the existing hook exports
 function useProcessingMonitor(projectId?: string) {
   // This is imported from the hooks file but needs to be available locally
@@ -45,72 +110,8 @@ interface ProcessingProgressProps {
 
 export function ProcessingProgress({ className }: ProcessingProgressProps) {
   const { jobs, activeJobs, loading, error, cancelJob, retryJob } = useVideoQueue();
-  const { stats, cleanupQueue } = useQueueManagement();
+  const { stats } = useQueueManagement();
   const { cancelJobs, retryJobs, deleteJobs } = useBatchJobOperations();
-
-  const getStatusIcon = (status: QueueJob['status']) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-500" />;
-      case 'processing':
-        return <Play className="w-4 h-4 text-blue-500 animate-pulse" />;
-      case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'cancelled':
-        return <Pause className="w-4 h-4 text-gray-500" />;
-      default:
-        return <AlertCircle className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-  const getStageIcon = (stage: string) => {
-    switch (stage) {
-      case 'download':
-        return <Download className="w-4 h-4" />;
-      case 'transcript':
-        return <FileText className="w-4 h-4" />;
-      case 'analysis':
-        return <BarChart3 className="w-4 h-4" />;
-      case 'processing':
-        return <Scissors className="w-4 h-4" />;
-      case 'upload':
-        return <Upload className="w-4 h-4" />;
-      default:
-        return <Clock className="w-4 h-4" />;
-    }
-  };
-
-  const getStatusColor = (status: QueueJob['status']) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'processing':
-        return 'bg-blue-100 text-blue-800';
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      case 'cancelled':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-600';
-    }
-  };
-
-  const formatJobTitle = (job: QueueJob) => {
-    switch (job.type) {
-      case 'process_video':
-        return `Process: ${job.payload.projectTitle || 'Video'}`;
-      case 'generate_clip':
-        return `Generate Clip`;
-      case 'generate_subtitles':
-        return `Generate Subtitles`;
-      default:
-        return job.type;
-    }
-  };
 
   if (loading) {
     return (
@@ -347,7 +348,7 @@ function QueueStats({ stats, onCleanup }: QueueStatsProps) {
     );
   }
 
-  const { totalJobs, pendingJobs, processingJobs, completedJobs, failedJobs } = stats;
+  const { totalJobs, pendingJobs, completedJobs, failedJobs } = stats;
   const successRate = totalJobs > 0 ? (completedJobs / totalJobs) * 100 : 0;
 
   return (
@@ -415,8 +416,8 @@ interface ProcessingMonitorProps {
   className?: string;
 }
 
-export function ProcessingMonitor({ projectId, className }: ProcessingMonitorProps) {
-  const { progress, isProcessing } = useProcessingMonitor(projectId);
+export function ProcessingMonitor({ className }: { className?: string }) {
+  const { progress, isProcessing } = useProcessingMonitor();
 
   if (!isProcessing && !progress) {
     return null;
@@ -426,7 +427,7 @@ export function ProcessingMonitor({ projectId, className }: ProcessingMonitorPro
     <Card className={className}>
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
-          {getStageIcon(progress?.stage || 'processing')}
+          {getStageIcon((progress as any)?.stage || 'processing')}
           Processing Video
         </CardTitle>
       </CardHeader>
@@ -435,22 +436,22 @@ export function ProcessingMonitor({ projectId, className }: ProcessingMonitorPro
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium capitalize">
-                {progress.stage} Stage
+                {(progress as any).stage} Stage
               </span>
               <span className="text-sm text-gray-600">
-                {progress.progress}%
+                {(progress as any).progress}%
               </span>
             </div>
             
-            <Progress value={progress.progress} className="w-full" />
+            <Progress value={(progress as any).progress} className="w-full" />
             
-            {progress.message && (
-              <p className="text-sm text-gray-600">{progress.message}</p>
+            {(progress as any).message && (
+              <p className="text-sm text-gray-600">{(progress as any).message}</p>
             )}
 
-            {progress.estimatedCompletion && (
+            {(progress as any).estimatedCompletion && (
               <p className="text-xs text-gray-500">
-                Estimated completion: {new Date(progress.estimatedCompletion).toLocaleTimeString()}
+                Estimated completion: {new Date((progress as any).estimatedCompletion).toLocaleTimeString()}
               </p>
             )}
           </div>
@@ -510,7 +511,7 @@ export function JobHistory({ limit = 10, showActions = true, className }: JobHis
                           size="sm"
                           onClick={() => cancelJob(job.id)}
                         >
-                          <Pause className="w-4 h-4" />
+                          <Pause className="w-3 h-3" />
                         </Button>
                       )}
                       {job.status === 'failed' && job.retry_count < job.max_retries && (
@@ -519,7 +520,7 @@ export function JobHistory({ limit = 10, showActions = true, className }: JobHis
                           size="sm"
                           onClick={() => retryJob(job.id)}
                         >
-                          <RotateCcw className="w-4 h-4" />
+                          <RotateCcw className="w-3 h-3" />
                         </Button>
                       )}
                     </div>
@@ -531,48 +532,5 @@ export function JobHistory({ limit = 10, showActions = true, className }: JobHis
         )}
       </CardContent>
     </Card>
-  );
-}
-
-interface ProcessingStatusBadgeProps {
-  jobId: string;
-  showProgress?: boolean;
-  className?: string;
-}
-
-export function ProcessingStatusBadge({ 
-  jobId, 
-  showProgress = false, 
-  className 
-}: ProcessingStatusBadgeProps) {
-  const { progress } = useJobProgress(jobId);
-
-  if (!progress) {
-    return (
-      <Badge variant="secondary" className={className}>
-        Unknown
-      </Badge>
-    );
-  }
-
-  const isProcessing = progress.progress_percent < 100;
-
-  return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <Badge 
-        className={`${isProcessing ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
-      >
-        {isProcessing ? 'Processing' : 'Completed'}
-      </Badge>
-      
-      {showProgress && isProcessing && (
-        <div className="flex items-center gap-2">
-          <Progress value={progress.progress_percent} className="w-20" />
-          <span className="text-xs text-gray-600">
-            {progress.progress_percent}%
-          </span>
-        </div>
-      )}
-    </div>
   );
 }

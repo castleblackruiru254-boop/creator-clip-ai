@@ -7,7 +7,7 @@ import {
   BarChart3, 
   Star,
   Settings,
-  TrendingUp
+  
 } from 'lucide-react';
 import SubscriptionManager from './SubscriptionManager';
 import BillingHistory from './BillingHistory';

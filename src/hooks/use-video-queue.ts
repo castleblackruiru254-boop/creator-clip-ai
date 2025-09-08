@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface QueueJob {
   id: string;
-  type: 'process_video' | 'generate_clip' | 'generate_subtitles';
+  type: string;
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   priority: 'low' | 'normal' | 'high';
   payload: any;
