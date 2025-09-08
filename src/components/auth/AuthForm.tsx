@@ -77,8 +77,42 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
         onSuccess?.();
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (error instanceof Error) {
+        // Handle common Supabase auth errors with user-friendly messages
+        switch (error.message) {
+          case 'Invalid login credentials':
+            errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+            break;
+          case 'User already registered':
+            errorMessage = 'An account with this email already exists. Please sign in instead.';
+            break;
+          case 'Email not confirmed':
+            errorMessage = 'Please check your email and click the confirmation link before signing in.';
+            break;
+          case 'Password should be at least 6 characters':
+            errorMessage = 'Password must be at least 6 characters long.';
+            break;
+          case 'Invalid email':
+            errorMessage = 'Please enter a valid email address.';
+            break;
+          case 'To many requests':
+          case 'Too many requests':
+            errorMessage = 'Too many attempts. Please wait a few minutes before trying again.';
+            break;
+          default:
+            errorMessage = error.message;
+        }
+      }
+      
       setError(errorMessage);
+      
+      toast({
+        title: "Authentication Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
