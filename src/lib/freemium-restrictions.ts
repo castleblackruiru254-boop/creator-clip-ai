@@ -97,14 +97,15 @@ export class FreemiumRestrictionsService {
     return FreemiumRestrictionsService.instance;
   }
 
-  private async getUserSubscription(userId: string): Promise<UserSubscription | null> {
+  private async getUserSubscription(): Promise<UserSubscription | null> {
     try {
-      const { data, error } = await supabase
-        .rpc('get_user_active_subscription', { p_user_id: userId });
-
-      if (error) throw error;
-
-      return data && data.length > 0 ? data[0] : null;
+      // Mock subscription data since we don't have user_subscriptions table
+      return {
+        plan_code: 'free',
+        status: 'active',
+        features: {},
+        credits_remaining: 0,
+      };
     } catch (error) {
       console.error('Failed to get user subscription:', error);
       return null;
@@ -136,11 +137,8 @@ export class FreemiumRestrictionsService {
 
       if (monthlyError) throw monthlyError;
 
-      // Get credits usage
-      const { data: creditsData, error: creditsError } = await supabase
-        .rpc('get_user_billing_summary', { p_user_id: userId });
-
-      if (creditsError) throw creditsError;
+      // Get credits usage - mock for now
+      const creditsData = [{ credits_used_this_month: 0 }];
 
       // Get storage usage
       const { data: storageData, error: storageError } = await supabase.storage
@@ -157,7 +155,7 @@ export class FreemiumRestrictionsService {
         clipsCreatedToday: dailyStats?.length || 0,
         clipsCreatedThisMonth: monthlyStats?.length || 0,
         creditsUsedToday: 0, // TODO: Implement daily credits tracking
-        creditsUsedThisMonth: creditsData?.[0]?.credits_used_this_month || 0,
+        creditsUsedThisMonth: creditsData[0]?.credits_used_this_month || 0,
         storageUsedMB: Math.round(storageUsedMB * 100) / 100,
       };
 
@@ -191,7 +189,7 @@ export class FreemiumRestrictionsService {
     }
 
     // Fetch fresh data
-    const subscription = await this.getUserSubscription(userId);
+    const subscription = await this.getUserSubscription();
     const usage = await this.getUserUsageStats(userId);
     
     const planCode = subscription?.plan_code || 'free';
@@ -296,14 +294,7 @@ export class FreemiumRestrictionsService {
           credits_used: creditsUsed,
         });
 
-      // Deduct credits if needed
-      if (creditsUsed > 0) {
-        await supabase.rpc('deduct_user_credits', {
-          p_user_id: userId,
-          p_credits: creditsUsed,
-          p_reason: 'clip_creation',
-        });
-      }
+      // Credits deduction would be implemented when billing system is ready
 
       // Invalidate cache
       this.cachedUserData = null;

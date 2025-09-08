@@ -156,9 +156,7 @@ export class WatermarkService {
    * Generate preview of watermark positioning (for UI)
    */
   public getWatermarkPreviewStyle(
-    position: WatermarkConfig['position'],
-    containerWidth: number,
-    containerHeight: number
+    position: WatermarkConfig['position']
   ): React.CSSProperties {
     const margin = 20;
     const styles: Record<string, React.CSSProperties> = {

@@ -1,10 +1,5 @@
 // Paystack utilities for payment processing
-export const initializePayment = async (options: {
-  email: string;
-  amount: number;
-  plan?: string;
-  metadata?: any;
-}) => {
+export const initializePayment = async () => {
   // Mock implementation - replace with actual Paystack integration
   console.warn('Paystack integration not implemented');
   return Promise.resolve({
@@ -13,7 +8,7 @@ export const initializePayment = async (options: {
   });
 };
 
-export const verifyPayment = async (reference: string) => {
+export const verifyPayment = async () => {
   // Mock implementation - replace with actual Paystack verification
   console.warn('Paystack verification not implemented');
   return Promise.resolve({

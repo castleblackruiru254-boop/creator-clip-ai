@@ -141,8 +141,7 @@ export class SubjectTrackingService {
    * Track subject across video frames
    */
   public async trackSubjectInVideo(
-    videoPath: string,
-    options: SubjectTrackingOptions = DEFAULT_TRACKING_OPTIONS
+    videoPath: string
   ): Promise<TrackingRegion[]> {
     try {
       console.log('Starting subject tracking for video:', videoPath);
@@ -304,7 +303,7 @@ export class SubjectTrackingService {
       console.log('Generating tracking data for:', videoPath);
 
       // Track subjects in video
-      const trackingRegions = await this.trackSubjectInVideo(videoPath, options);
+      const trackingRegions = await this.trackSubjectInVideo(videoPath);
 
       // Get video dimensions (placeholder - would use FFprobe in real implementation)
       const videoWidth = 1920;
@@ -379,10 +378,9 @@ export class SubjectTrackingService {
   /**
    * Check if tracking is available for current user plan
    */
-  public isTrackingAvailable(planCode: string): boolean {
+  public isTrackingAvailable(): boolean {
     // Face tracking available for all plans
     // Advanced tracking features might be premium-only
-    const premiumPlans = ['viral_pro_monthly', 'viral_enterprise_monthly'];
     return true; // Basic tracking for all, advanced features for premium
   }
 

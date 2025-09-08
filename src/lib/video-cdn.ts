@@ -115,7 +115,6 @@ export class VideoCDNService {
     }>;
     defaultQuality: string;
   } {
-    const baseUrl = `${CDN_CONFIG.storageUrl}/${bucketName}/${filePath}`;
     
     const qualities = [
       {
@@ -171,7 +170,7 @@ export class VideoCDNService {
         uploadOptions.metadata = options.metadata;
       }
       
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from(bucketName)
         .upload(filePath, file, uploadOptions);
       
@@ -201,7 +200,7 @@ export class VideoCDNService {
     }
   ): Promise<{ success: boolean; url?: string; error?: string }> {
     try {
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from(bucketName)
         .upload(filePath, imageBuffer, {
           contentType: 'image/webp',
@@ -470,11 +469,7 @@ export class VideoCDNService {
   /**
    * Gets video analytics data
    */
-  static async getVideoAnalytics(
-    bucketName: string,
-    filePath: string,
-    timeRange: 'day' | 'week' | 'month' = 'week'
-  ): Promise<{
+  static async getVideoAnalytics(): Promise<{
     views: number;
     bandwidth: number;
     requests: number;
@@ -722,7 +717,7 @@ export class StorageBucketService {
     fileSizeLimit?: number;
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      const { data, error } = await supabase.storage.createBucket(bucketName, {
+      const { error } = await supabase.storage.createBucket(bucketName, {
         public: options?.public ?? true,
         allowedMimeTypes: options?.allowedMimeTypes || [
           'video/mp4',
@@ -751,7 +746,7 @@ export class StorageBucketService {
   /**
    * Gets bucket usage statistics
    */
-  static async getBucketStats(bucketName: string): Promise<{
+  static async getBucketStats(): Promise<{
     fileCount: number;
     totalSize: number;
     averageFileSize: number;

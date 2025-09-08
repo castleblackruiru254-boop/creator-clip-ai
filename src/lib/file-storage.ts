@@ -68,8 +68,6 @@ export interface StorageQuota {
 
 // Service classes and utility functions
 export class FileStorageService {
-  private readonly CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-  private readonly MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB max
 
   /**
    * Upload file with chunked upload support for large files
@@ -141,8 +139,7 @@ export class FileStorageService {
    */
   async downloadFile(
     filePath: string,
-    bucket: string = 'temp-files',
-    options: DownloadOptions = {}
+    bucket: string = 'temp-files'
   ): Promise<{ success: boolean; data?: Blob; url?: string; error?: string }> {
     try {
       const { data, error } = await supabase.storage
@@ -292,26 +289,6 @@ export class FileStorageService {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Private helper methods
-  private validateFile = (
-    file: File | Blob,
-    options: UploadOptions
-  ): { valid: boolean; error?: string } => {
-    // Check file size
-    if (file.size > (options.maxSize || this.MAX_FILE_SIZE)) {
-      return {
-        valid: false,
-        error: `File size exceeds maximum allowed size of ${(options.maxSize || this.MAX_FILE_SIZE) / (1024 * 1024)}MB`,
-      };
-    }
-
-    return { valid: true };
-  }
-
-  private isImageFile = (filePath: string): boolean => {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    return imageExtensions.some(ext => filePath.toLowerCase().endsWith(ext));
-  }
 }
 
 // Create singleton instance

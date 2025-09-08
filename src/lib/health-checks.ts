@@ -54,7 +54,7 @@ class HealthChecker {
     const startTime = performance.now();
     
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('projects')
         .select('count')
         .limit(1);
@@ -97,7 +97,7 @@ class HealthChecker {
     
     try {
       // Test storage accessibility
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('videos')
         .list('', { limit: 1 });
       
