@@ -13,15 +13,15 @@ interface Profile {
   id: string;
   email: string;
   full_name: string | null;
-  subscription_tier: string;
-  credits_remaining: number;
+  subscription_tier: string | null;
+  credits_remaining: number | null;
 }
 
 interface Project {
   id: string;
   title: string;
   description: string | null;
-  status: string;
+  status: string | null;
   created_at: string;
   source_video_url?: string;
   source_video_duration?: number;
@@ -41,53 +41,7 @@ interface Clip {
   created_at: string;
 }
 
-// Production-grade retry mechanism for database queries
-const executeWithRetry = async (
-  queryFn: (signal: AbortSignal) => Promise<any>,
-  parentSignal: AbortSignal,
-  operationName: string,
-  maxRetries = 2,
-  baseDelay = 1000
-): Promise<any> => {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (parentSignal.aborted) {
-      throw new Error(`${operationName} aborted`);
-    }
-    
-    try {
-      console.log(`🔄 ${operationName} attempt ${attempt + 1}/${maxRetries + 1}`);
-      
-      // Create individual query timeout (5s per attempt)
-      const queryController = new AbortController();
-      const queryTimeoutId = setTimeout(() => queryController.abort(), 5000);
-      
-      // If parent signal aborts, abort the query signal too
-      if (parentSignal.aborted) {
-        queryController.abort();
-      }
-      
-      const result = await queryFn(queryController.signal);
-      clearTimeout(queryTimeoutId);
-      
-      console.log(`✅ ${operationName} succeeded on attempt ${attempt + 1}`);
-      return result;
-      
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn(`⚠️ ${operationName} failed on attempt ${attempt + 1}:`, lastError.message);
-      
-      if (attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
-        console.log(`⏳ Retrying ${operationName} in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  throw new Error(`${operationName} failed after ${maxRetries + 1} attempts: ${lastError?.message}`);
-};
+// ... keep existing imports and interfaces
 
 const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
@@ -108,109 +62,28 @@ const Dashboard = () => {
     console.log('🔄 fetchUserData called with user:', user?.id);
     setLoadingData(true);
 
-    // Create an AbortController to enforce request-level timeouts
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per query
-
     try {
-      if (!user?.id) throw new Error('No valid user session found');
+      if (!user?.id) {
+        throw new Error('No valid user session found');
+      }
 
-      // DIAGNOSTIC PHASE: Comprehensive auth/db testing
-      console.log('🔎 DIAGNOSTICS: Starting comprehensive database diagnostics...');
-      
-      // 1) Verify current auth session
-      console.log('🔎 DIAGNOSTICS: Checking auth session...');
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log('🔎 DIAGNOSTICS: Session check result:', { session: !!session, sessionError, userId: session?.user?.id });
-      
-      if (sessionError) {
-        throw new Error(`Auth session error: ${sessionError.message}`);
-      }
-      
-      if (!session) {
-        throw new Error('No active auth session found');
-      }
-      
-      // 2) Test basic connectivity with a simple query
-      console.log('🔎 DIAGNOSTICS: Testing basic database connectivity...');
-      const connectivityStart = Date.now();
-      const { data: healthCheck, error: healthError, status: healthStatus } = await supabase
-        .from('profiles')
-        .select('count')
-        .limit(0); // Just test the connection, don't return data
-      
-      const connectivityTime = Date.now() - connectivityStart;
-      console.log('🔎 DIAGNOSTICS: Connectivity test result:', { 
-        healthCheck, 
-        healthError, 
-        healthStatus, 
-        connectivityTime: `${connectivityTime}ms` 
-      });
-      
-      if (healthError) {
-        throw new Error(`Database connectivity failed (status ${healthStatus}): ${healthError.message}`);
-      }
-      
-      // 3) Test RLS policies by attempting to read profiles with current user
-      console.log('🔎 DIAGNOSTICS: Testing RLS policy access...');
-      const rlsStart = Date.now();
-      const { data: rlsTest, error: rlsError, status: rlsStatus } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .limit(1);
-        
-      const rlsTime = Date.now() - rlsStart;
-      console.log('🔎 DIAGNOSTICS: RLS test result:', { 
-        rlsTest, 
-        rlsError, 
-        rlsStatus, 
-        rlsTime: `${rlsTime}ms` 
-      });
-      
-      if (rlsError) {
-        if (rlsError.code === 'PGRST116' || rlsError.message.includes('RLS')) {
-          throw new Error(`RLS Policy Error: User ${user.id} cannot access profiles table. RLS policy may be misconfigured.`);
-        }
-        throw new Error(`RLS test failed (status ${rlsStatus}): ${rlsError.message}`);
-      }
-      
-      console.log('✅ DIAGNOSTICS: All diagnostics passed. Proceeding with data fetch...');
-      
-
-      // 1) Fetch profile with timeout and retry logic
+      // 1) Fetch or create profile
       console.log('📡 Fetching profile for:', user.id);
       
-      const profileQueryWithTimeout = async (signal: AbortSignal) => {
-        return supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .abortSignal(signal)
-          .maybeSingle();
-      };
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
       
-      const profileResult = await executeWithRetry(profileQueryWithTimeout, controller.signal, 'Profile fetch');
-      
-      if (profileResult.error) {
-        console.error('❌ Profile fetch error:', { 
-          profileError: profileResult.error, 
-          profileStatus: profileResult.status 
-        });
-        throw new Error(`Profile fetch failed (status ${profileResult.status}): ${profileResult.error.message}`);
+      if (profileError) {
+        console.error('❌ Profile fetch error:', profileError);
+        throw new Error(`Profile fetch failed: ${profileError.message}`);
       }
-      
-      const profileData = profileResult.data;
 
       if (!profileData) {
-        // Create a profile in a production-grade way
+        // Create a new profile
         console.log('ℹ️ No profile found, creating one...');
-        console.log('📝 Creating profile with data:', {
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name,
-          session_exists: !!session
-        });
         
         const newProfileData = {
           id: user.id,
@@ -220,82 +93,66 @@ const Dashboard = () => {
           credits_remaining: 10,
         };
         
-        const profileCreateQuery = async (signal: AbortSignal) => {
-          return supabase
-            .from('profiles')
-            .insert(newProfileData)
-            .abortSignal(signal)
-            .select()
-            .single();
-        };
+        const { data: createdProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert(newProfileData)
+          .select()
+          .single();
         
-        const createResult = await executeWithRetry(profileCreateQuery, controller.signal, 'Profile creation');
-        
-        if (createResult.error) {
-          console.error('❌ Profile creation failed:', {
-            error: createResult.error,
-            status: createResult.status,
-            profileData: newProfileData
-          });
-          
-          // Check for specific error types
-        if (createResult.error.code === '23505') {
-          // Duplicate key error - profile already exists, try fetching again
-          console.log('ℹ️ Duplicate key error, profile might have been created by another process. Retrying fetch...');
-          const refetchResult = await executeWithRetry(profileQueryWithTimeout, controller.signal, 'Profile refetch after duplicate');
-          if (refetchResult.data) {
-            setProfile(refetchResult.data);
+        if (createError) {
+          // If it's a duplicate key error, try fetching again
+          if (createError.code === '23505') {
+            console.log('ℹ️ Profile already exists, fetching...');
+            const { data: existingProfile, error: fetchError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+              
+            if (fetchError) {
+              throw new Error(`Profile fetch after duplicate failed: ${fetchError.message}`);
+            }
+            setProfile(existingProfile);
           } else {
-            throw new Error('Profile creation failed with duplicate key, but refetch also failed');
+            console.error('❌ Profile creation failed:', createError);
+            throw new Error(`Profile creation failed: ${createError.message}`);
           }
         } else {
-          throw new Error(`Profile creation failed (${createResult.status}): ${createResult.error.message}`);
-        }
-        } else {
-          console.log('✅ Profile created successfully:', createResult.data);
-          setProfile(createResult.data);
+          console.log('✅ Profile created successfully:', createdProfile);
+          setProfile(createdProfile);
         }
       } else {
         console.log('✅ Profile found:', profileData);
         setProfile(profileData);
       }
 
-      // 2) Fetch projects with timeout and retry logic
+      // 2) Fetch projects
       console.log('📡 Fetching projects...');
       
-      const projectsQueryWithTimeout = async (signal: AbortSignal) => {
-        return supabase
-          .from('projects')
-          .select('*')
-          .eq('user_id', user.id)
-          .abortSignal(signal)
-          .order('created_at', { ascending: false });
-      };
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
       
-      const projectsResult = await executeWithRetry(projectsQueryWithTimeout, controller.signal, 'Projects fetch');
-      
-      if (projectsResult.error) {
-        console.error('❌ Projects fetch error:', { 
-          projectsError: projectsResult.error, 
-          projectsStatus: projectsResult.status 
-        });
-        throw new Error(`Projects fetch failed (status ${projectsResult.status}): ${projectsResult.error.message}`);
+      if (projectsError) {
+        console.error('❌ Projects fetch error:', projectsError);
+        throw new Error(`Projects fetch failed: ${projectsError.message}`);
       }
       
-      setProjects(projectsResult.data || []);
+      console.log('✅ Projects fetched:', projectsData?.length || 0);
+      setProjects((projectsData || []).map(project => ({
+        ...project,
+        source_video_url: project.source_video_url || undefined,
+        source_video_duration: project.source_video_duration || undefined
+      })));
 
     } catch (error) {
       console.error('❌ Failed to fetch dashboard data:', error);
 
       let description = 'Failed to load dashboard data.';
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          description = 'Request timed out. Please check your connection and try again.';
-        } else if (/permission|RLS/i.test(error.message)) {
-          description = 'Permission error due to RLS policy. Ensure the user has access.';
-        } else {
-          description = error.message;
-        }
+        description = error.message;
       }
 
       toast({
@@ -304,7 +161,6 @@ const Dashboard = () => {
         variant: 'destructive',
       });
     } finally {
-      clearTimeout(timeoutId);
       setLoadingData(false);
     }
   }, [user, toast]);
@@ -429,15 +285,15 @@ const Dashboard = () => {
             
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm">
-                <span className="capitalize bg-primary/10 text-primary px-2 py-1 rounded-full">
-                  {profile?.subscription_tier}
-                </span>
-                <span className="text-muted-foreground">
-                  {profile?.credits_remaining} credits
-                </span>
+              <span className="capitalize bg-primary/10 text-primary px-2 py-1 rounded-full">
+                {profile?.subscription_tier || 'free'}
+              </span>
+              <span className="text-muted-foreground">
+                {profile?.credits_remaining || 0} credits
+              </span>
               </div>
               
-              {profile?.subscription_tier === 'free' && (
+              {(profile?.subscription_tier === 'free' || !profile?.subscription_tier) && (
                 <Button variant="hero" size="sm" onClick={() => navigate('/pricing')}>
                   <Crown className="w-4 h-4 mr-2" />
                   Upgrade
