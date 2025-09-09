@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.generate-clips]
 verify_jwt = true
+
+[functions.update-last-sign-in]
+verify_jwt = false

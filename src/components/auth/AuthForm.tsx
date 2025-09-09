@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Video, Mail, Lock, User, Github, Chrome } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { AuthService } from "@/lib/auth-service-simple";
 import { useToast } from "@/hooks/use-toast";
 import { SignUpSchema, SignInSchema, validateAndSanitize } from "@/lib/validation";
 
@@ -63,12 +64,17 @@ const AuthForm = ({ onSuccess }: AuthFormProps) => {
           description: "Please check your email to verify your account.",
         });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: validatedData.email,
           password: validatedData.password,
         });
 
         if (error) throw error;
+
+        // Update the user's last sign-in time using our production-grade service
+        if (data.user) {
+          await AuthService.onSignInSuccess(data.user.id);
+        }
 
         toast({
           title: "Welcome back!",

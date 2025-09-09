@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { AuthService } from '@/lib/auth-service-simple';
 
 interface AuthContextType {
   user: User | null;
@@ -27,10 +28,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Update last_sign_in timestamp on successful sign-in events
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Call our secure Edge Function to update last_sign_in
+          await AuthService.onSignInSuccess(session.user.id);
+        }
       }
     );
 

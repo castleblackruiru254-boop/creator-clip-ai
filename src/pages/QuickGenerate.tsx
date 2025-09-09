@@ -33,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SearchSchema, ProjectSchema, YouTubeUrlSchema, validateAndSanitize } from "@/lib/validation";
-import { useVideoProcessor } from "@/hooks/use-video-queue";
+import { useVideoQueue, useQueueManagement } from "@/hooks/use-video-queue";
 import { validateVideoFile, getProcessingEstimate, isValidVideoUrl } from "@/lib/video-validation";
 import { ProcessingMonitor } from "@/components/video-processing/ProcessingProgress";
 import FileUpload from "@/components/upload/FileUpload";
@@ -89,7 +89,9 @@ const QuickGenerate = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { processVideo, processing: queueProcessing } = useVideoProcessor();
+  const { addJob } = useQueueManagement();
+  const { activeJobs } = useVideoQueue();
+  const queueProcessing = activeJobs.length > 0;
   
   // Search tab state
   const [searchQuery, setSearchQuery] = useState("");
@@ -245,14 +247,19 @@ const QuickGenerate = () => {
     try {
       setProcessing(selectedVideo.id);
       
-      // Use the new queue-based video processor
-      const result = await processVideo(selectedVideo.url, projectTitle, {
+      // Add job to the processing queue
+      const job = await addJob({
+        type: 'video_processing',
         priority: 'normal',
-        clipCount: 5,
-        clipDuration: 60,
+        payload: {
+          videoUrl: selectedVideo.url,
+          projectTitle,
+          clipCount: 5,
+          clipDuration: 60,
+        },
       });
 
-      if (result.success) {
+      if (job) {
         toast({
           title: "Processing Started",
           description: "Your video has been added to the processing queue. You'll be notified when clips are ready!",
@@ -261,7 +268,7 @@ const QuickGenerate = () => {
         // Navigate to dashboard to show progress
         navigate('/dashboard');
       } else {
-        throw new Error(result.error || 'Failed to start processing');
+        throw new Error('Failed to add job to the processing queue');
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to start video processing.';
@@ -541,14 +548,20 @@ const QuickGenerate = () => {
 
     setGeneratingClips(true);
     try {
-      // Use the new queue-based video processor
-      const result = await processVideo(analyzedVideo.url, projectTitle, {
+      // Add job to the processing queue with selected highlights
+      const job = await addJob({
+        type: 'video_processing',
         priority: 'normal',
-        clipCount: selectedHighlights.length,
-        clipDuration: 60,
+        payload: {
+          videoUrl: analyzedVideo.url,
+          projectTitle,
+          clipCount: selectedHighlights.length,
+          clipDuration: 60,
+          highlights: selectedHighlights,
+        },
       });
 
-      if (result.success) {
+      if (job) {
         toast({
           title: "Processing Started",
           description: `Your video has been queued for processing. ${selectedHighlights.length} clips will be generated!`,
@@ -557,7 +570,7 @@ const QuickGenerate = () => {
         // Navigate to dashboard to show progress
         navigate('/dashboard');
       } else {
-        throw new Error(result.error || 'Failed to start processing');
+        throw new Error('Failed to add job to the processing queue');
       }
     } catch (error) {
       console.error('Clip generation failed:', error);

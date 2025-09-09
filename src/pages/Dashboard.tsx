@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Video, Upload, Play, BarChart3, LogOut, User, Settings, ChevronDown, ChevronRight, Download, ExternalLink, Clock, Star, Loader2, Crown, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ProcessingProgress, ProcessingMonitor } from "@/components/video-processing/ProcessingProgress";
-import { useVideoQueue, useVideoProcessor } from "@/hooks/use-video-queue";
+import { useVideoQueue } from "@/hooks/use-video-queue";
 
 interface Profile {
   id: string;
@@ -41,6 +41,54 @@ interface Clip {
   created_at: string;
 }
 
+// Production-grade retry mechanism for database queries
+const executeWithRetry = async (
+  queryFn: (signal: AbortSignal) => Promise<any>,
+  parentSignal: AbortSignal,
+  operationName: string,
+  maxRetries = 2,
+  baseDelay = 1000
+): Promise<any> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (parentSignal.aborted) {
+      throw new Error(`${operationName} aborted`);
+    }
+    
+    try {
+      console.log(`🔄 ${operationName} attempt ${attempt + 1}/${maxRetries + 1}`);
+      
+      // Create individual query timeout (5s per attempt)
+      const queryController = new AbortController();
+      const queryTimeoutId = setTimeout(() => queryController.abort(), 5000);
+      
+      // If parent signal aborts, abort the query signal too
+      if (parentSignal.aborted) {
+        queryController.abort();
+      }
+      
+      const result = await queryFn(queryController.signal);
+      clearTimeout(queryTimeoutId);
+      
+      console.log(`✅ ${operationName} succeeded on attempt ${attempt + 1}`);
+      return result;
+      
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`⚠️ ${operationName} failed on attempt ${attempt + 1}:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
+        console.log(`⏳ Retrying ${operationName} in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw new Error(`${operationName} failed after ${maxRetries + 1} attempts: ${lastError?.message}`);
+};
+
 const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -53,54 +101,209 @@ const Dashboard = () => {
   const [showQueue, setShowQueue] = useState(false);
   const { toast } = useToast();
   const { activeJobs } = useVideoQueue();
-  const { processVideo, processing } = useVideoProcessor();
+  const isProcessing = false; // Temporary fix - replace with actual logic if needed
 
   const fetchUserData = useCallback(async () => {
     console.log('🔄 fetchUserData called with user:', user?.id);
     setLoadingData(true);
-    
+
+    // Create an AbortController to enforce request-level timeouts
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per query
+
     try {
-      console.log('📡 Fetching user profile...');
-      // Fetch user profile
-      const { data: profileData, error: profileError } = await supabase
+      if (!user?.id) throw new Error('No valid user session found');
+
+      // DIAGNOSTIC PHASE: Comprehensive auth/db testing
+      console.log('🔎 DIAGNOSTICS: Starting comprehensive database diagnostics...');
+      
+      // 1) Verify current auth session
+      console.log('🔎 DIAGNOSTICS: Checking auth session...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('🔎 DIAGNOSTICS: Session check result:', { session: !!session, sessionError, userId: session?.user?.id });
+      
+      if (sessionError) {
+        throw new Error(`Auth session error: ${sessionError.message}`);
+      }
+      
+      if (!session) {
+        throw new Error('No active auth session found');
+      }
+      
+      // 2) Test basic connectivity with a simple query
+      console.log('🔎 DIAGNOSTICS: Testing basic database connectivity...');
+      const connectivityStart = Date.now();
+      const { data: healthCheck, error: healthError, status: healthStatus } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('id', user!.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('❌ Profile fetch error:', profileError);
-        throw profileError;
+        .select('count')
+        .limit(0); // Just test the connection, don't return data
+      
+      const connectivityTime = Date.now() - connectivityStart;
+      console.log('🔎 DIAGNOSTICS: Connectivity test result:', { 
+        healthCheck, 
+        healthError, 
+        healthStatus, 
+        connectivityTime: `${connectivityTime}ms` 
+      });
+      
+      if (healthError) {
+        throw new Error(`Database connectivity failed (status ${healthStatus}): ${healthError.message}`);
       }
       
-      console.log('✅ Profile data fetched:', profileData);
-      setProfile(profileData);
-
-      console.log('📡 Fetching user projects...');
-      // Fetch user projects
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
-
-      if (projectsError) {
-        console.error('❌ Projects fetch error:', projectsError);
-        throw projectsError;
+      // 3) Test RLS policies by attempting to read profiles with current user
+      console.log('🔎 DIAGNOSTICS: Testing RLS policy access...');
+      const rlsStart = Date.now();
+      const { data: rlsTest, error: rlsError, status: rlsStatus } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .limit(1);
+        
+      const rlsTime = Date.now() - rlsStart;
+      console.log('🔎 DIAGNOSTICS: RLS test result:', { 
+        rlsTest, 
+        rlsError, 
+        rlsStatus, 
+        rlsTime: `${rlsTime}ms` 
+      });
+      
+      if (rlsError) {
+        if (rlsError.code === 'PGRST116' || rlsError.message.includes('RLS')) {
+          throw new Error(`RLS Policy Error: User ${user.id} cannot access profiles table. RLS policy may be misconfigured.`);
+        }
+        throw new Error(`RLS test failed (status ${rlsStatus}): ${rlsError.message}`);
       }
       
-      console.log('✅ Projects data fetched:', projectsData);
-      setProjects(projectsData || []);
+      console.log('✅ DIAGNOSTICS: All diagnostics passed. Proceeding with data fetch...');
+      
+
+      // 1) Fetch profile with timeout and retry logic
+      console.log('📡 Fetching profile for:', user.id);
+      
+      const profileQueryWithTimeout = async (signal: AbortSignal) => {
+        return supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .abortSignal(signal)
+          .maybeSingle();
+      };
+      
+      const profileResult = await executeWithRetry(profileQueryWithTimeout, controller.signal, 'Profile fetch');
+      
+      if (profileResult.error) {
+        console.error('❌ Profile fetch error:', { 
+          profileError: profileResult.error, 
+          profileStatus: profileResult.status 
+        });
+        throw new Error(`Profile fetch failed (status ${profileResult.status}): ${profileResult.error.message}`);
+      }
+      
+      const profileData = profileResult.data;
+
+      if (!profileData) {
+        // Create a profile in a production-grade way
+        console.log('ℹ️ No profile found, creating one...');
+        console.log('📝 Creating profile with data:', {
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name,
+          session_exists: !!session
+        });
+        
+        const newProfileData = {
+          id: user.id,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || null,
+          subscription_tier: 'free',
+          credits_remaining: 10,
+        };
+        
+        const profileCreateQuery = async (signal: AbortSignal) => {
+          return supabase
+            .from('profiles')
+            .insert(newProfileData)
+            .abortSignal(signal)
+            .select()
+            .single();
+        };
+        
+        const createResult = await executeWithRetry(profileCreateQuery, controller.signal, 'Profile creation');
+        
+        if (createResult.error) {
+          console.error('❌ Profile creation failed:', {
+            error: createResult.error,
+            status: createResult.status,
+            profileData: newProfileData
+          });
+          
+          // Check for specific error types
+          if (createResult.error.code === '23505') {
+            // Duplicate key error - profile already exists, try fetching again
+            console.log('ℹ️ Duplicate key error, profile might have been created by another process. Retrying fetch...');
+            const refetchResult = await executeWithRetry(profileQueryWithTimeout, controller.signal, 'Profile refetch after duplicate');
+            if (refetchResult.data) {
+              setProfile(refetchResult.data);
+            } else {
+              throw new Error('Profile creation failed with duplicate key, but refetch also failed');
+            }
+          } else {
+            throw new Error(`Profile creation failed (${createResult.status}): ${createResult.error.message}`);
+          }
+        } else {
+          console.log('✅ Profile created successfully:', createResult.data);
+          setProfile(createResult.data);
+        }
+      } else {
+        console.log('✅ Profile found:', profileData);
+        setProfile(profileData);
+      }
+
+      // 2) Fetch projects with timeout and retry logic
+      console.log('📡 Fetching projects...');
+      
+      const projectsQueryWithTimeout = async (signal: AbortSignal) => {
+        return supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', user.id)
+          .abortSignal(signal)
+          .order('created_at', { ascending: false });
+      };
+      
+      const projectsResult = await executeWithRetry(projectsQueryWithTimeout, controller.signal, 'Projects fetch');
+      
+      if (projectsResult.error) {
+        console.error('❌ Projects fetch error:', { 
+          projectsError: projectsResult.error, 
+          projectsStatus: projectsResult.status 
+        });
+        throw new Error(`Projects fetch failed (status ${projectsResult.status}): ${projectsResult.error.message}`);
+      }
+      
+      setProjects(projectsResult.data || []);
 
     } catch (error) {
-      console.error('❌ Failed to fetch user data:', error);
+      console.error('❌ Failed to fetch dashboard data:', error);
+
+      let description = 'Failed to load dashboard data.';
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          description = 'Request timed out. Please check your connection and try again.';
+        } else if (/permission|RLS/i.test(error.message)) {
+          description = 'Permission error due to RLS policy. Ensure the user has access.';
+        } else {
+          description = error.message;
+        }
+      }
+
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load user data",
-        variant: "destructive",
+        title: 'Dashboard Error',
+        description,
+        variant: 'destructive',
       });
     } finally {
-      console.log('✅ fetchUserData complete, setting loadingData to false');
+      clearTimeout(timeoutId);
       setLoadingData(false);
     }
   }, [user, toast]);

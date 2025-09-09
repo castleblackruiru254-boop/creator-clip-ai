@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { createServer, IncomingMessage, ServerResponse } from 'http';
+import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,25 +18,36 @@ interface YouTubeVideo {
   url: string;
 }
 
-serve(async (req) => {
+const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  // Set CORS headers
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    res.writeHead(200);
+    return res.end();
   }
 
   try {
-    const { query, maxResults = 25, publishedAfter, publishedBefore, location, relevanceLanguage = 'en' } = await req.json()
+    let body = '';
+    for await (const chunk of req) {
+      body += chunk;
+    }
+    
+    const { query, maxResults = 25, publishedAfter, publishedBefore, location, relevanceLanguage = 'en' } = JSON.parse(body);
 
     // Get authorization header
-    const authHeader = req.headers.get('Authorization')
+    const authHeader = req.headers.authorization
     if (!authHeader) {
       throw new Error('Authorization header missing')
     }
 
     // Create Supabase client
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      process.env.SUPABASE_URL ?? '',
+      process.env.SUPABASE_ANON_KEY ?? ''
     )
 
     // Get the authenticated user
@@ -50,7 +61,7 @@ serve(async (req) => {
       throw new Error('Authentication failed')
     }
 
-    const youtubeApiKey = Deno.env.get('YOUTUBE_API_KEY');
+    const youtubeApiKey = process.env.YOUTUBE_API_KEY;
     if (!youtubeApiKey) {
       throw new Error('YouTube API key not configured');
     }
@@ -183,23 +194,22 @@ serve(async (req) => {
 
     console.log(`Found ${filteredVideos.length} suitable videos for user ${user.email}`);
 
-    return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(response));
 
   } catch (error) {
-    console.error('Error in youtube-search function:', error)
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        details: 'Failed to search YouTube videos'
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
-    )
+    console.error('Error in youtube-search function:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      success: false,
+      error: error.message,
+      details: 'Failed to search YouTube videos'
+    }));
   }
-})
+});
+
+// Start the server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
