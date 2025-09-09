@@ -29,7 +29,7 @@ interface CreditsVerification {
 const CreditsSuccess = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const { toast } = useToast();
   
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'success' | 'failed'>('verifying');
@@ -68,7 +68,14 @@ const CreditsSuccess = () => {
     try {
       const result = await verifyPayment(paymentReference);
       
-      setVerificationData(result);
+      const verificationResult: CreditsVerification = {
+        success: result.success,
+        status: result.success ? 'success' : 'failed',
+        message: result.message,
+        ...result
+      };
+      
+      setVerificationData(verificationResult);
       setVerificationStatus(result.success ? 'success' : 'failed');
       
       if (result.success) {
@@ -88,7 +95,7 @@ const CreditsSuccess = () => {
       setVerificationStatus('failed');
       setVerificationData({
         success: false,
-        status: 'error',
+        status: 'error', 
         message: error instanceof Error ? error.message : 'Verification failed'
       });
       

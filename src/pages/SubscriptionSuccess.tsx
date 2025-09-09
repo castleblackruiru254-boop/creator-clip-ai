@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -35,7 +34,7 @@ interface PaymentVerification {
 const SubscriptionSuccess = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const { toast } = useToast();
   
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'success' | 'failed'>('verifying');
@@ -74,7 +73,14 @@ const SubscriptionSuccess = () => {
     try {
       const result = await verifyPayment(paymentReference);
       
-      setVerificationData(result);
+      const verificationResult: PaymentVerification = {
+        success: result.success,
+        status: result.success ? 'success' : 'failed',
+        message: result.message,
+        ...result
+      };
+      
+      setVerificationData(verificationResult);
       setVerificationStatus(result.success ? 'success' : 'failed');
       
       if (result.success) {

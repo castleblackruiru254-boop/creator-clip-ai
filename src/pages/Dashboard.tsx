@@ -101,7 +101,8 @@ const Dashboard = () => {
   const [showQueue, setShowQueue] = useState(false);
   const { toast } = useToast();
   const { activeJobs } = useVideoQueue();
-  const isProcessing = false; // Temporary fix - replace with actual logic if needed
+  // Remove unused variables
+  // const _isProcessing = false;
 
   const fetchUserData = useCallback(async () => {
     console.log('🔄 fetchUserData called with user:', user?.id);
@@ -238,18 +239,18 @@ const Dashboard = () => {
           });
           
           // Check for specific error types
-          if (createResult.error.code === '23505') {
-            // Duplicate key error - profile already exists, try fetching again
-            console.log('ℹ️ Duplicate key error, profile might have been created by another process. Retrying fetch...');
-            const refetchResult = await executeWithRetry(profileQueryWithTimeout, controller.signal, 'Profile refetch after duplicate');
-            if (refetchResult.data) {
-              setProfile(refetchResult.data);
-            } else {
-              throw new Error('Profile creation failed with duplicate key, but refetch also failed');
-            }
+        if (createResult.error.code === '23505') {
+          // Duplicate key error - profile already exists, try fetching again
+          console.log('ℹ️ Duplicate key error, profile might have been created by another process. Retrying fetch...');
+          const refetchResult = await executeWithRetry(profileQueryWithTimeout, controller.signal, 'Profile refetch after duplicate');
+          if (refetchResult.data) {
+            setProfile(refetchResult.data);
           } else {
-            throw new Error(`Profile creation failed (${createResult.status}): ${createResult.error.message}`);
+            throw new Error('Profile creation failed with duplicate key, but refetch also failed');
           }
+        } else {
+          throw new Error(`Profile creation failed (${createResult.status}): ${createResult.error.message}`);
+        }
         } else {
           console.log('✅ Profile created successfully:', createResult.data);
           setProfile(createResult.data);
@@ -324,7 +325,10 @@ const Dashboard = () => {
       
       setProjectClips(prev => ({
         ...prev,
-        [projectId]: clipsData || []
+        [projectId]: (clipsData || []).map(clip => ({
+          ...clip,
+          status: clip.status || 'pending'
+        }))
       }));
     } catch (error) {
       console.error('Failed to fetch project clips:', error);
@@ -610,7 +614,7 @@ const Dashboard = () => {
                     <CardContent className="p-6">
                       {/* Real-time processing monitor for active projects */}
                       {project.status === 'processing' && (
-                        <ProcessingMonitor projectId={project.id} className="mb-4" />
+                        <ProcessingMonitor className="mb-4" />
                       )}
                       
                       {/* Project Header */}

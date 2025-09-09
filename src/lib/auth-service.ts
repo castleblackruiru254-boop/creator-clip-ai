@@ -117,10 +117,16 @@ export class AuthService {
             }
           }
           
-          // Check if we should retry
-          if (this.isRetryableHttpStatus(response.status) && attempt < this.MAX_RETRY_ATTEMPTS) {
-            lastError = httpError
-            await this.delay(this.BASE_RETRY_DELAY * Math.pow(2, attempt - 1))
+          // Check if retryable - inline check instead of method
+          const retryableStatuses = [500, 502, 503, 504];
+          const isRetryable = retryableStatuses.includes(response.status);
+            if (isRetryable && attempt < this.MAX_RETRY_ATTEMPTS) {
+            lastError = {
+              code: 'HTTP_ERROR',
+              message: `HTTP ${response.status}: ${response.statusText}`,
+              details: { status: response.status, body: errorText }
+            };
+            await this.delay(this.BASE_RETRY_DELAY * Math.pow(2, attempt - 1));
             continue
           } else {
             // Don't retry, return error immediately
@@ -237,34 +243,6 @@ export class AuthService {
 
   private static delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
-  }
-
-  private static isNonRetryableError(error: any): boolean {
-    // Don't retry on these errors
-    const nonRetryableErrors = [
-      'INVALID_USER_ID',
-      'INVALID_UUID_FORMAT',
-      'USER_NOT_FOUND',
-      'CONFIGURATION_ERROR'
-    ]
-    
-    return nonRetryableErrors.some(code => 
-      error.message?.includes(code) || error.details?.code === code
-    )
-  }
-
-  private static isRetryableHttpStatus(status: number): boolean {
-    // Retry on these HTTP status codes
-    const retryableStatuses = [
-      500, // Internal Server Error
-      502, // Bad Gateway
-      503, // Service Unavailable
-      504, // Gateway Timeout
-      522, // Connection Timed Out (Cloudflare)
-      524, // A Timeout Occurred (Cloudflare)
-    ]
-    
-    return retryableStatuses.includes(status)
   }
 
   private static mapErrorCode(errorString: string): string {

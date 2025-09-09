@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -12,9 +12,7 @@ import {
   Building2,
   ArrowLeft,
   Video,
-  Sparkles,
-  CreditCard,
-  Wallet
+  Sparkles
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,9 +38,9 @@ const PricingPage = () => {
   const { toast } = useToast();
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
-  const [userSubscription, setUserSubscription] = useState<any>(null);
-  const [creditsRemaining, setCreditsRemaining] = useState<number>(0);
-  const { initializePayment } = usePaystack();
+  const [_userSubscription, _setUserSubscription] = useState<any>(null);
+  const [_creditsRemaining, _setCreditsRemaining] = useState<number>(0);
+  const { initializePayment: _initializePayment } = usePaystack();
 
   // Check for payment reference from redirect
   useEffect(() => {
@@ -65,21 +63,24 @@ const PricingPage = () => {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('subscription_tier, credits_remaining')
-        .eq('id', user?.id)
+        .eq('id', user?.id || '')
         .single();
       
       if (profileError) throw profileError;
       
-      setCreditsRemaining(profile.credits_remaining || 0);
+      _setCreditsRemaining(profile.credits_remaining || 0);
       
-      // Get active subscription details
-      const { data: subscription, error: subError } = await supabase
-        .rpc('get_user_active_subscription', { p_user_id: user?.id });
+      // Get active subscription details - using profiles table for now
+      const { data: userProfile, error: userError } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', user?.id || '')
+        .single();
       
-      if (subError) throw subError;
+      if (userError) throw userError;
       
-      if (subscription && subscription.length > 0) {
-        setUserSubscription(subscription[0]);
+      if (userProfile) {
+        _setUserSubscription(userProfile);
       }
     } catch (error) {
       console.error('Failed to load subscription:', error);
