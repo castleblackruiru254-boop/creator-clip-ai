@@ -8,9 +8,9 @@ export const initializePayment = async () => {
   });
 };
 
-export const verifyPayment = async () => {
+export const verifyPayment = async (reference: string) => {
   // Mock implementation - replace with actual Paystack verification
-  console.warn('Paystack verification not implemented');
+  console.warn('Paystack verification not implemented:', reference);
   return Promise.resolve({
     success: false,
     message: 'Payment verification not yet configured'

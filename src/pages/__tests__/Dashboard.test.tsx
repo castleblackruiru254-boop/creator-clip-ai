@@ -40,7 +40,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 }))
 
 describe('Dashboard', () => {
-  const mockUseAuth = useAuth as vi.MockedFunction<typeof useAuth>
+  const mockUseAuth = useAuth as any
 
   beforeEach(() => {
     vi.clearAllMocks()

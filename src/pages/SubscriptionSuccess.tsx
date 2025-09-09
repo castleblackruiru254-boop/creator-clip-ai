@@ -67,6 +67,8 @@ const SubscriptionSuccess = () => {
     } else if (verificationStatus === 'success' && timeLeft === 0) {
       navigate('/dashboard/subscription');
     }
+    
+    return undefined;
   }, [verificationStatus, timeLeft, navigate]);
 
   const verifySubscriptionPayment = async (paymentReference: string) => {
@@ -74,10 +76,8 @@ const SubscriptionSuccess = () => {
       const result = await verifyPayment(paymentReference);
       
       const verificationResult: PaymentVerification = {
-        success: result.success,
-        status: result.success ? 'success' : 'failed',
-        message: result.message,
-        ...result
+        ...result,
+        status: result.success ? 'success' : 'failed'
       };
       
       setVerificationData(verificationResult);

@@ -17,10 +17,22 @@ afterAll(() => server.close())
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
+  root: Element | null = null
+  rootMargin: string = ''
+  thresholds: ReadonlyArray<number> = []
+  
+  constructor(_callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+    this.root = (options?.root as Element) || null
+    this.rootMargin = options?.rootMargin || ''
+    this.thresholds = options?.threshold ? [options.threshold].flat() : [0]
+  }
+  
   disconnect() {}
   observe() {}
   unobserve() {}
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
 }
 
 // Mock ResizeObserver

@@ -62,6 +62,8 @@ const CreditsSuccess = () => {
     } else if (verificationStatus === 'success' && timeLeft === 0) {
       navigate('/dashboard/subscription?tab=credits');
     }
+    
+    return undefined;
   }, [verificationStatus, timeLeft, navigate]);
 
   const verifyCreditsPayment = async (paymentReference: string) => {
@@ -69,10 +71,8 @@ const CreditsSuccess = () => {
       const result = await verifyPayment(paymentReference);
       
       const verificationResult: CreditsVerification = {
-        success: result.success,
-        status: result.success ? 'success' : 'failed',
-        message: result.message,
-        ...result
+        ...result,
+        status: result.success ? 'success' : 'failed'
       };
       
       setVerificationData(verificationResult);

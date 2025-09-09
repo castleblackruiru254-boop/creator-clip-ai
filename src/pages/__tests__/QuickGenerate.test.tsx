@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@/test/utils'
+import { render, screen, waitFor } from '@/test/utils'
 import userEvent from '@testing-library/user-event'
 import { useAuth } from '@/contexts/AuthContext'
 import QuickGenerate from '../QuickGenerate'
@@ -25,7 +25,7 @@ vi.mock('@/lib/validation', () => ({
   SearchSchema: {},
   ProjectSchema: {},
   YouTubeUrlSchema: {},
-  validateAndSanitize: vi.fn((schema, data) => data),
+  validateAndSanitize: vi.fn((data) => data),
 }))
 
 // Mock Supabase client
@@ -45,7 +45,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 }))
 
 describe('QuickGenerate', () => {
-  const mockUseAuth = useAuth as vi.MockedFunction<typeof useAuth>
+  const mockUseAuth = useAuth as any
 
   beforeEach(() => {
     vi.clearAllMocks()
