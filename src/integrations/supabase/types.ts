@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          avatar_url: string | null
+          email: string
+          full_name: string | null
+          id: string
+          is_active: boolean
+        }
+        Insert: {
+          avatar_url?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          is_active?: boolean
+        }
+        Update: {
+          avatar_url?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          is_active?: boolean
+        }
+        Relationships: []
+      }
       clips: {
         Row: {
           ai_score: number | null
@@ -126,6 +150,8 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          last_activity_at: string | null
+          last_sign_in: string | null
           subscription_tier: string | null
           updated_at: string
         }
@@ -136,6 +162,8 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          last_activity_at?: string | null
+          last_sign_in?: string | null
           subscription_tier?: string | null
           updated_at?: string
         }
@@ -146,6 +174,8 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          last_activity_at?: string | null
+          last_sign_in?: string | null
           subscription_tier?: string | null
           updated_at?: string
         }
@@ -283,6 +313,10 @@ export type Database = {
       get_user_project_count: {
         Args: { user_uuid: string }
         Returns: number
+      }
+      update_last_sign_in: {
+        Args: { p_ts: string; p_user_id: string }
+        Returns: undefined
       }
     }
     Enums: {
