@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, useNavigate, Link } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,16 +58,19 @@ const Dashboard = () => {
   // Remove unused variables
   // const _isProcessing = false;
 
-  const fetchUserData = useCallback(async () => {
+  const fetchUserData = async () => {
     console.log('🔄 fetchUserData called with user:', user?.id);
+    
+    if (!user?.id) {
+      console.error('❌ No valid user session found');
+      setLoadingData(false);
+      return;
+    }
+
     setLoadingData(true);
 
     try {
-      if (!user?.id) {
-        throw new Error('No valid user session found');
-      }
-
-      // 1) Fetch or create profile
+      // 1) Fetch profile
       console.log('📡 Fetching profile for:', user.id);
       
       const { data: profileData, error: profileError } = await supabase
@@ -81,49 +84,19 @@ const Dashboard = () => {
         throw new Error(`Profile fetch failed: ${profileError.message}`);
       }
 
-      if (!profileData) {
-        // Create a new profile
-        console.log('ℹ️ No profile found, creating one...');
-        
-        const newProfileData = {
+      if (profileData) {
+        console.log('✅ Profile found:', profileData);
+        setProfile(profileData);
+      } else {
+        console.log('⚠️ No profile found, user may need to complete setup');
+        // Set a basic profile for now
+        setProfile({
           id: user.id,
           email: user.email || '',
           full_name: user.user_metadata?.full_name || null,
           subscription_tier: 'free',
-          credits_remaining: 10,
-        };
-        
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert(newProfileData)
-          .select()
-          .single();
-        
-        if (createError) {
-          // If it's a duplicate key error, try fetching again
-          if (createError.code === '23505') {
-            console.log('ℹ️ Profile already exists, fetching...');
-            const { data: existingProfile, error: fetchError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-              
-            if (fetchError) {
-              throw new Error(`Profile fetch after duplicate failed: ${fetchError.message}`);
-            }
-            setProfile(existingProfile);
-          } else {
-            console.error('❌ Profile creation failed:', createError);
-            throw new Error(`Profile creation failed: ${createError.message}`);
-          }
-        } else {
-          console.log('✅ Profile created successfully:', createdProfile);
-          setProfile(createdProfile);
-        }
-      } else {
-        console.log('✅ Profile found:', profileData);
-        setProfile(profileData);
+          credits_remaining: 5,
+        });
       }
 
       // 2) Fetch projects
@@ -149,21 +122,16 @@ const Dashboard = () => {
 
     } catch (error) {
       console.error('❌ Failed to fetch dashboard data:', error);
-
-      let description = 'Failed to load dashboard data.';
-      if (error instanceof Error) {
-        description = error.message;
-      }
-
       toast({
         title: 'Dashboard Error',
-        description,
+        description: error instanceof Error ? error.message : 'Failed to load dashboard data',
         variant: 'destructive',
       });
     } finally {
+      console.log('✅ Dashboard data loading complete');
       setLoadingData(false);
     }
-  }, [user, toast]);
+  };
 
   const fetchProjectClips = async (projectId: string) => {
     // Check if already loading or loaded
@@ -204,7 +172,7 @@ const Dashboard = () => {
       console.log('🚀 Calling fetchUserData...');
       fetchUserData();
     }
-  }, [user, loading, fetchUserData]);
+  }, [user, loading]);
 
   const toggleProjectExpansion = async (projectId: string) => {
     if (selectedProject === projectId) {
