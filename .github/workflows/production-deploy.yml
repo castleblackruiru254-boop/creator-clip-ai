@@ -85,15 +85,15 @@ jobs:
         if: github.event_name == 'pull_request'
 
       - name: CodeQL Analysis
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: typescript, javascript
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
   # Container Build and Registry Push
   container:
